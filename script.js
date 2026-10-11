@@ -5,7 +5,7 @@
    [2] Gyro Parallax
    [3] Tap-to-Bloom (burst petals + easter eggs)
    [4] Confession Rain (tap 3 lần → mưa cánh hoa)
-   [5] Long-press Secret
+   [5] Long-press Secret (5s, có charge visual)
    [6] Focus Pull
    [7] Anamorphic Flare
    [8] Chromatic Aberration (CSS)
@@ -52,7 +52,7 @@
     scrollWeights: [1, 2.4, 3.2, 1.6, 3, 1.6],
 
     // === Magic ===
-      magic: {
+    magic: {
       buttonLabel: 'Chạm để mở khoá chế độ thần kỳ',
       deniedLabel: 'huhu chị hong cho em nghiêng máy :(',
       tiltStrength: 1.0,
@@ -62,10 +62,11 @@
         'thôi chị đọc hết rồi ha, e ngại é'
       ],
       tapMoreText: 'e nói rồi đó, chị nhớ nha',
-      holdText: 'giữ lâu vậy... =))) ",
+      holdText: 'chị kiên nhẫn ghê, thú vị thật',
       rainText: 'e thích chị thật đó, hong có đùa đâu',
       tapRequiredForRain: 3,
-      holdMs: 1200
+      holdMs: 5000,
+      tapMaxFraction: 0.10
     }
   };
 
@@ -135,11 +136,11 @@
   };
 
   /* =======================================================
-     STATE — MAGIC
+     STATE
      ======================================================= */
   // Gyro
-  let gyroSupported = (typeof DeviceOrientationEvent !== 'undefined');
-  let gyroNeedsPermission = gyroSupported &&
+  const gyroSupported = (typeof DeviceOrientationEvent !== 'undefined');
+  const gyroNeedsPermission = gyroSupported &&
     typeof DeviceOrientationEvent.requestPermission === 'function';
   let gyroActive = false;
   let tiltTX = 0, tiltTY = 0;
@@ -147,14 +148,15 @@
 
   // Tap / Hold
   let rosePulse = 0;
+  let holdCharge = 0;
+  let holdActive = false;
   let tapCount = 0;
-  let holdTimer = null;
   let holdFired = false;
   let burstMsgTimer = null;
 
   // Burst queue & rain
-  let burstQueue = [];
-  let rainPetals = [];
+  const burstQueue = [];
+  const rainPetals = [];
   let rainTime = 0;
 
   // Focus Pull
@@ -344,7 +346,7 @@
     const dens = forcedDens !== undefined ? forcedDens : stops(g, DENS);
     const mv = forcedDens !== undefined ? 0 : stops(g, MOTE);
 
-    const breath = 1 + Math.sin(T * 1.15) * 0.035;   // Petal Breath ±3.5%
+    const breath = 1 + Math.sin(T * 1.15) * 0.035;
 
     if (dens > 0.002 || mv > 0.002) {
       const Hc = H + 2 * MARG;
@@ -390,7 +392,7 @@
       }
     }
 
-    /* ---- Burst petals (tap-to-bloom) ---- */
+    /* ---- Burst petals ---- */
     if (burstQueue.length) {
       for (let i = burstQueue.length - 1; i >= 0; i--) {
         const b = burstQueue[i];
@@ -411,7 +413,6 @@
     /* ---- Confession Rain ---- */
     if (rainTime > 0) {
       rainTime -= dt;
-      // spawn
       const spawnRate = 3.2;
       for (let i = 0; i < spawnRate; i++) {
         if (Math.random() < 0.55) {
@@ -428,24 +429,14 @@
           });
         }
       }
+    }
+    if (rainPetals.length) {
       for (let i = rainPetals.length - 1; i >= 0; i--) {
         const rp = rainPetals[i];
         rp.x += rp.vx * dt;
         rp.y += rp.vy * dt;
         rp.x += Math.sin(rp.y * 0.02 + rp.sway) * 40 * dt;
         rp.rot += rp.rs * dt;
-        if (rp.y > H + 100) { rainPetals.splice(i, 1); continue; }
-        ctx.globalAlpha = 0.92;
-        ctx.save();
-        ctx.translate(rp.x, rp.y); ctx.rotate(rp.rot);
-        ctx.drawImage(rp.sprite, -rp.size / 2, -rp.size / 2, rp.size, rp.size);
-        ctx.restore();
-      }
-    } else if (rainPetals.length) {
-      // clear dần khi hết rain
-      for (let i = rainPetals.length - 1; i >= 0; i--) {
-        const rp = rainPetals[i];
-        rp.x += rp.vx * dt; rp.y += rp.vy * dt; rp.rot += rp.rs * dt;
         if (rp.y > H + 100) { rainPetals.splice(i, 1); continue; }
         ctx.globalAlpha = 0.92;
         ctx.save();
@@ -509,7 +500,7 @@
     if (!needUpdate) return;
     lastBloom = bp;
     lastPulse = pulse;
-    const pulseScale = 1 + pulse * 0.10;   // 0..1 → 1.0..1.10
+    const pulseScale = 1 + pulse * 0.12;
     for (let i = 0; i < roseParts.length; i++) {
       const r = roseParts[i];
       const q = smooth(seg(bp, r.st, r.st + 0.42));
@@ -551,7 +542,7 @@
       ps.push(p); g += p;
     }
 
-    /* ----- Gyro tilt smooth ----- */
+    /* ----- Gyro smooth ----- */
     if (gyroActive && !REDUCED) {
       tiltX += (tiltTX - tiltX) * (1 - Math.exp(-dt * 4.5));
       tiltY += (tiltTY - tiltY) * (1 - Math.exp(-dt * 4.5));
@@ -628,9 +619,12 @@
       setScene(2, o);
       if (o > 0.003) {
         const sp = smooth(p);
-        const sc = (1 - (1 - sp) * .14 + seg(p, .85, 1) * .04) * (1 + rosePulse * 0.06);
+
+        const chargeBoost = holdCharge * 0.12;
+        const sc = (1 - (1 - sp) * .14 + seg(p, .85, 1) * .04) * (1 + rosePulse * 0.06 + chargeBoost);
+
         E.roseWrap.style.transform = REDUCED ? '' :
-          'translate3d(' + (GX * 0.5).toFixed(1) + 'px,' + ((1 - sp) * 28 + GY * 0.4).toFixed(1) + 'px,0) scale(' + sc.toFixed(4) + ') rotate(' + ((1 - sp) * 1.5 + tiltX * 0.5).toFixed(2) + 'deg)';
+          'translate3d(' + (GX * 0.5).toFixed(1) + 'px,' + ((1 - sp) * 28 + GY * 0.4).toFixed(1) + 'px,0) scale(' + sc.toFixed(4) + ') rotate(' + ((1 - sp) * 1.5 + tiltX * 0.5 + holdCharge * 1.2).toFixed(2) + 'deg)';
 
         const stemP = REDUCED ? 1 : easeOut(seg(p, 0, .24));
         E.stem.style.strokeDashoffset = (1 - stemP).toFixed(4);
@@ -642,17 +636,17 @@
         E.leafL.setAttribute('transform', 'translate(198 548) scale(' + (-Math.max(.001, l2 * 1.3)).toFixed(3) + ' ' + Math.max(.001, l2 * 1.3).toFixed(3) + ') rotate(-38)');
         E.recept.style.opacity = REDUCED ? 1 : seg(p, .2, .32);
 
-        setBloom(REDUCED ? 1 : seg(p, .30, .88), rosePulse);
+        setBloom(REDUCED ? 1 : seg(p, .30, .88), rosePulse + holdCharge * 0.5);
 
         const gl = REDUCED ? .85 : smooth(seg(p, .45, .95));
-        E.glow.style.opacity = (gl * .95).toFixed(3);
-        E.glow.style.transform = 'translate(-50%,-50%) scale(' + (.7 + .5 * gl + rosePulse * 0.15).toFixed(3) + ')';
+        const glowBoost = holdCharge * 0.5;
+        E.glow.style.opacity = clamp(gl * .95 + glowBoost * 0.6, 0, 1).toFixed(3);
+        E.glow.style.transform = 'translate(-50%,-50%) scale(' + (.7 + .5 * gl + rosePulse * 0.15 + glowBoost).toFixed(3) + ')';
 
-        // Anamorphic Flare
         if (E.flare) {
-          const flareV = smooth(seg(p, .78, .92)) * (1 - smooth(seg(p, .90, .99)));
-          E.flare.style.transform = 'translate(-50%,-50%) scaleX(' + (flareV * 1.25).toFixed(3) + ')';
-          E.flare.style.opacity = (flareV * M).toFixed(3);
+          const flareV = smooth(seg(p, .78, .92)) * (1 - smooth(seg(p, .90, .99))) + holdCharge * 0.4;
+          E.flare.style.transform = 'translate(-50%,-50%) scaleX(' + clamp(flareV * 1.25, 0, 1.5).toFixed(3) + ')';
+          E.flare.style.opacity = clamp(flareV * M, 0, 1).toFixed(3);
         }
 
         reveal(E.bLine, smooth(seg(p, .84, .95)));
@@ -714,7 +708,7 @@
       }
     }
 
-    /* ---- Focus Pull (blur khi giao thoa cảnh) ---- */
+    /* ---- Focus Pull ---- */
     if (!REDUCED) {
       let maxMid = 0;
       for (let i = 0; i < 6; i++) {
@@ -736,7 +730,7 @@
   }
 
   /* =======================================================
-     VÒNG LẶP CHÍNH (Spring physics)
+     VÒNG LẶP CHÍNH
      ======================================================= */
   let raf = 0, last = 0, T = 0;
   let us = 0, usVel = 0, lastU = -1, snap = true;
@@ -757,13 +751,30 @@
     if (snap || REDUCED) {
       us = target; usVel = 0; snap = false;
     } else {
-      const k = 165;   // stiffness
-      const c = 22;    // damping — underdamped, có độ nảy nhẹ
+      const k = 165;
+      const c = 22;
       usVel += (-k * (us - target) - c * usVel) * dt;
       us += usVel * dt;
       if (Math.abs(us - target) < 1e-4 && Math.abs(usVel) < 1e-4) {
         us = target; usVel = 0;
       }
+    }
+
+    /* ---- Hold charge tích luỹ ---- */
+    if (holdActive && holdCharge < 1) {
+      holdCharge += dt * 1000 / CONFIG.magic.holdMs;
+      if (holdCharge >= 1) {
+        holdCharge = 1;
+        if (!holdFired) {
+          holdFired = true;
+          holdActive = false;
+          onRoseHold();
+        }
+      }
+      rosePulse = Math.max(rosePulse, holdCharge * 0.55);
+    } else if (!holdActive && holdCharge > 0) {
+      holdCharge -= dt * 2.5;
+      if (holdCharge < 0) holdCharge = 0;
     }
 
     /* ---- Pulse decay ---- */
@@ -772,7 +783,7 @@
       if (rosePulse < 0) rosePulse = 0;
     }
 
-    if (us !== lastU || rosePulse > 0) {
+    if (us !== lastU || rosePulse > 0 || holdCharge > 0) {
       lastU = us;
       update(us, T, dt);
     }
@@ -783,7 +794,7 @@
     }
 
     if (!REDUCED && pageVisible && !document.hidden) request();
-    else if (us !== target || burstQueue.length || rainPetals.length || rosePulse > 0) request();
+    else if (us !== target || burstQueue.length || rainPetals.length || rosePulse > 0 || holdCharge > 0) request();
     else last = 0;
   }
 
@@ -793,7 +804,6 @@
   function bindGyro() {
     window.addEventListener('deviceorientation', function (e) {
       if (e.beta == null || e.gamma == null) return;
-      // gamma: -90..90 (trái/phải), beta: -180..180 (trước/sau)
       tiltTX = clamp(e.gamma / 40, -1, 1);
       tiltTY = clamp((e.beta - 45) / 40, -1, 1);
     }, { passive: true });
@@ -828,18 +838,15 @@
   function setupMagicButton() {
     if (!E.magicBtn) return;
     if (!gyroSupported) {
-      // Desktop: ẩn nút
       E.magicBtn.style.display = 'none';
       return;
     }
     if (!gyroNeedsPermission) {
-      // Android hoặc iOS cũ: bật tự động, ẩn nút
       bindGyro();
       gyroActive = true;
       E.magicBtn.style.display = 'none';
       return;
     }
-    // iOS 13+: chờ user tap
     E.magicBtn.addEventListener('click', function once() {
       E.magicBtn.removeEventListener('click', once);
       enableGyro();
@@ -847,7 +854,7 @@
   }
 
   /* =======================================================
-     MAGIC — TAP TO BLOOM / HOLD
+     MAGIC — TAP / HOLD
      ======================================================= */
   function showBurstMsg(text, duration) {
     if (!E.burstMsg) return;
@@ -885,10 +892,9 @@
     const texts = CONFIG.magic.tapTexts;
     if (tapCount <= texts.length) {
       showBurstMsg(texts[tapCount - 1], 2400);
-    }else {
+    } else {
       showBurstMsg(CONFIG.magic.tapMoreText, 2400);
     }
-    // Đủ số lần → mưa cánh hoa
     if (tapCount === CONFIG.magic.tapRequiredForRain) {
       rainTime = 6.0;
       setTimeout(function () {
@@ -899,29 +905,34 @@
 
   function onRoseHold() {
     rosePulse = 1.0;
-    triggerBurst(34, W / 2, H * 0.42, 1.5);
-    showBurstMsg(CONFIG.magic.holdText, 3200);
-    rainTime = 4.0;
+    holdCharge = 0;
+    triggerBurst(40, W / 2, H * 0.42, 1.7);
+    showBurstMsg(CONFIG.magic.holdText, 3400);
+    rainTime = 5.0;
   }
 
   function setupRoseHit() {
     if (!E.roseHit) return;
+
     const startHold = function () {
       holdFired = false;
-      clearTimeout(holdTimer);
-      holdTimer = setTimeout(function () {
-        holdFired = true;
-        onRoseHold();
-      }, CONFIG.magic.holdMs);
+      holdActive = true;
+      holdCharge = 0;
     };
-    const cancelHold = function () { clearTimeout(holdTimer); };
+
+    const cancelHold = function () {
+      holdActive = false;
+    };
+
     const endHold = function () {
-      clearTimeout(holdTimer);
-      if (!holdFired) {
-        // Chỉ tap nếu hoa đã nở
-        if (sceneOpacity[2] > 0.55 && u2Phase() > 0.5) ();
+      if (!holdFired && holdActive) {
+        if (holdCharge < CONFIG.magic.tapMaxFraction) {
+          if (sceneOpacity[2] > 0.55 && u2Phase() > 0.5) onRoseTap();
+        }
       }
+      holdActive = false;
     };
+
     E.roseHit.addEventListener('pointerdown', startHold);
     E.roseHit.addEventListener('pointerup', endHold);
     E.roseHit.addEventListener('pointercancel', cancelHold);
@@ -929,7 +940,6 @@
   }
 
   function u2Phase() {
-    // Tiến độ cục bộ của scene bloom
     return clamp((us - B[2]) / (B[3] - B[2]));
   }
 
@@ -990,7 +1000,8 @@
       setTimeout(function () {
         window.scrollTo(0, 0);
         snap = true; usVel = 0; lastU = -1; lastBloom = -1;
-        tapCount = 0; rosePulse = 0; burstQueue.length = 0; rainPetals.length = 0; rainTime = 0;
+        tapCount = 0; rosePulse = 0; holdCharge = 0; holdActive = false; holdFired = false;
+        burstQueue.length = 0; rainPetals.length = 0; rainTime = 0;
         ['oName', 'oSub'].forEach(function (id) {
           const el = $(id);
           el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
