@@ -33,19 +33,19 @@
   <div class="stage" id="stage">
     <div id="bg"></div>
 
-    <!-- Cinematic layer -->
     <div class="leak l1" id="leak1" aria-hidden="true"></div>
     <div class="leak l2" id="leak2" aria-hidden="true"></div>
 
     <canvas id="petals" aria-hidden="true"></canvas>
     <div id="vignette"></div>
 
-    <!-- Film grain -->
     <div id="grain" aria-hidden="true"></div>
 
-    <!-- Letterbox -->
     <div class="letterbox top"    id="lbTop" aria-hidden="true"></div>
     <div class="letterbox bottom" id="lbBot" aria-hidden="true"></div>
+
+    <!-- Burst message overlay (dùng cho tap-to-bloom + long-press) -->
+    <div class="burst-msg" id="burstMsg" aria-hidden="true"></div>
 
     <!-- ========== CẢNH 1 — OPENING ========== -->
     <section class="scene" id="s0" aria-label="Mở đầu">
@@ -73,6 +73,12 @@
       <div class="open-text" id="openText">
         <p class="intro-line name" id="oName" style="--d:.6s"></p>
         <p class="intro-line sub" id="oSub" style="--d:2s"></p>
+
+        <!-- ✨ MAGIC BUTTON FOR IPHONE ✨ -->
+        <button class="magic-btn intro-line" id="magicBtn" type="button" style="--d:3.4s" aria-label="Bật chế độ nghiêng máy">
+          <span class="magic-ico" aria-hidden="true">✦</span>
+          <span class="magic-label" id="magicLabel">Chạm để mở khoá chế độ thần kỳ</span>
+        </button>
       </div>
 
       <div class="hint" id="hint">
@@ -80,7 +86,7 @@
       </div>
     </section>
 
-    <!-- ========== CẢNH 2 — PETAL JOURNEY (chỉ còn 1 câu) ========== -->
+    <!-- ========== CẢNH 2 — PETAL JOURNEY ========== -->
     <section class="scene" id="s1" aria-label="Cánh hoa bay">
       <div class="blob b1" id="b1"></div>
       <div class="blob b2" id="b2"></div>
@@ -93,6 +99,8 @@
     <!-- ========== CẢNH 3 — BLOOM ========== -->
     <section class="scene" id="s2" aria-label="Hoa nở">
       <div class="glow" id="bloomGlow"></div>
+      <div class="flare" id="flare" aria-hidden="true"></div>
+
       <div class="rose-wrap" id="roseWrap">
         <svg id="rose" viewBox="0 0 400 640" aria-hidden="true">
           <path id="stem" d="M200 318 C194 400 210 480 197 628" pathLength="1" fill="none" stroke="#728a62" stroke-width="7" stroke-linecap="round" stroke-dasharray="1 1" stroke-dashoffset="1" opacity="0"/>
@@ -101,6 +109,8 @@
           <ellipse id="recept" cx="200" cy="316" rx="15" ry="11" fill="#6f8760" opacity="0"/>
           <g id="petalsG"></g>
         </svg>
+        <!-- Tap / Hold hit-area -->
+        <div class="rose-hit" id="roseHit" role="button" tabindex="-1" aria-label="Chạm vào hoa"></div>
       </div>
       <p class="line rv bloom-line" id="bLine"></p>
     </section>
