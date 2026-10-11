@@ -1,5 +1,16 @@
 /* =========================================================
-   GỬI CHỊ TRÂM — script.js  (cinematic + iPhone optimized)
+   GỬI CHỊ TRÂM — script.js
+   Cinematic + iPhone Magic:
+   [1] Magic Button (gyro permission)
+   [2] Gyro Parallax
+   [3] Tap-to-Bloom (burst petals + easter eggs)
+   [4] Confession Rain (tap 3 lần → mưa cánh hoa)
+   [5] Long-press Secret
+   [6] Focus Pull
+   [7] Anamorphic Flare
+   [8] Chromatic Aberration (CSS)
+   [9] Petal Breath
+   [10] Scroll Rubbery (spring physics)
    ========================================================= */
 (function () {
   'use strict';
@@ -24,13 +35,13 @@
 
     quiet: [
       'cái bình hoa',
-      'ko bt chị có thích nó khum -_- '
+      'em tự làm é :>'
     ],
 
     confession: [
       'Chị Trâm,',
       'Em thích chị. Em chỉ muốn chị biết điều đó thôi.',
-      'e thích chị nhiều lắm >.<'
+      'Chị không cần trả lời liền đâu ó >.<'
     ],
 
     ending: {
@@ -38,7 +49,22 @@
       button: 'Xem lại'
     },
 
-    scrollWeights: [1, 2.4, 3.2, 1.6, 3, 1.6]
+    scrollWeights: [1, 2.4, 3.2, 1.6, 3, 1.6],
+
+    // === Magic ===
+    magic: {
+      buttonLabel: 'Chạm để mở khoá chế độ thần kỳ',
+      deniedLabel: 'huhu chị hong cho em nghiêng máy :(',
+      tiltStrength: 1.0,
+      tapTexts: [
+        'e thích chị nhiều lắm ó >.<',
+        'thiệt á, hong có giỡn đâu',
+        'thôi chị đọc hết rồi ha, e ngại é'
+      ],
+      holdText: 'chị giữ lâu vậy... e còn ngại hơn é >.<',
+      tapRequiredForRain: 3,
+      holdMs: 1200
+    }
   };
 
   /* =======================================================
@@ -78,7 +104,7 @@
   }
 
   /* =======================================================
-     THAM CHIẾU DOM
+     DOM
      ======================================================= */
   const docEl = document.documentElement;
   const scrollEl = $('scroll');
@@ -87,20 +113,53 @@
   const ctx = canvas.getContext ? canvas.getContext('2d') : null;
 
   const sceneEls = [$('s0'), $('s1'), $('s2'), $('s3'), $('s4'), $('s5')];
+  const sceneOpacity = new Array(6).fill(0);
+
   const E = {
     openText: $('openText'), sprig: $('sprig'), hint: $('hint'),
-    s1cam: $('s1cam'), j0: $('j0'), j1: $('j1'), b1: $('b1'), b2: $('b2'), b3: $('b3'),
-    roseWrap: $('roseWrap'), stem: $('stem'), leafR: $('leafR'), leafL: $('leafL'),
-    recept: $('recept'), petalsG: $('petalsG'), glow: $('bloomGlow'), bLine: $('bLine'),
+    magicBtn: $('magicBtn'), magicLabel: $('magicLabel'),
+    s1cam: $('s1cam'), j0: $('j0'),
+    b1: $('b1'), b2: $('b2'), b3: $('b3'),
+    roseWrap: $('roseWrap'), roseHit: $('roseHit'),
+    stem: $('stem'), leafR: $('leafR'), leafL: $('leafL'),
+    recept: $('recept'), petalsG: $('petalsG'),
+    glow: $('bloomGlow'), bLine: $('bLine'), flare: $('flare'),
     s3cam: $('s3cam'), q0: $('q0'), q1: $('q1'),
     confBox: $('confBox'), c0: $('c0'), c1: $('c1'), c2: $('c2'), c3: $('c3'), rule: $('rule'),
     fall: $('fall'), thanks: $('thanks'), restart: $('restart'),
     lbTop: $('lbTop'), lbBot: $('lbBot'),
-    leak1: $('leak1'), leak2: $('leak2')
+    leak1: $('leak1'), leak2: $('leak2'),
+    burstMsg: $('burstMsg')
   };
 
   /* =======================================================
-     NỘI DUNG
+     STATE — MAGIC
+     ======================================================= */
+  // Gyro
+  let gyroSupported = (typeof DeviceOrientationEvent !== 'undefined');
+  let gyroNeedsPermission = gyroSupported &&
+    typeof DeviceOrientationEvent.requestPermission === 'function';
+  let gyroActive = false;
+  let tiltTX = 0, tiltTY = 0;
+  let tiltX = 0, tiltY = 0;
+
+  // Tap / Hold
+  let rosePulse = 0;
+  let tapCount = 0;
+  let holdTimer = null;
+  let holdFired = false;
+  let burstMsgTimer = null;
+
+  // Burst queue & rain
+  let burstQueue = [];
+  let rainPetals = [];
+  let rainTime = 0;
+
+  // Focus Pull
+  let lastFocusBlur = -1;
+
+  /* =======================================================
+     RENDER TEXT
      ======================================================= */
   function renderText() {
     document.title = CONFIG.pageTitle;
@@ -113,6 +172,7 @@
     CONFIG.confession.forEach(function (t, i) { const el = $('c' + i); if (el) el.textContent = t; });
     E.thanks.textContent = CONFIG.ending.thanks;
     E.restart.textContent = CONFIG.ending.button;
+    if (E.magicLabel) E.magicLabel.textContent = CONFIG.magic.buttonLabel;
   }
 
   /* =======================================================
@@ -134,7 +194,7 @@
   }
 
   /* =======================================================
-     CHIA CẢNH THEO TIẾN ĐỘ CUỘN
+     CHIA CẢNH
      ======================================================= */
   const WSUM = CONFIG.scrollWeights.reduce(function (a, b) { return a + b; }, 0);
   const B = [0];
@@ -147,7 +207,7 @@
     scrollEl.style.height = ((WSUM + 1) * 100) + unit;
   })();
 
-  /* ----- Bảng màu nền theo g ----- */
+  /* ----- Palette nền ----- */
   const BG_STOPS = [
     [0,    '#fdf1ec', '#f7dcd9'],
     [1,    '#fbe9e4', '#f0c8cd'],
@@ -178,7 +238,7 @@
   const MOTE   = [[0, 0], [2.2, 0], [2.6, .7], [3, 1], [3.7, .9], [3.95, 0], [6, 0]];
 
   /* =======================================================
-     CÁNH HOA TRÊN CANVAS
+     SPRITES
      ======================================================= */
   const SPRITE_COLORS = [
     ['#fcdde1', '#ec9fb0'],
@@ -275,56 +335,124 @@
     }
   }
 
-  function drawPetals(sy, g, T, forcedDens) {
+  function drawPetals(sy, g, T, dt, forcedDens) {
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     const dens = forcedDens !== undefined ? forcedDens : stops(g, DENS);
     const mv = forcedDens !== undefined ? 0 : stops(g, MOTE);
-    if (dens <= 0.002 && mv <= 0.002) return;
 
-    const Hc = H + 2 * MARG;
-    for (let i = 0; i < petals.length; i++) {
-      const p = petals[i];
-      const vis = smooth((dens - p.rank) * 12);
-      if (vis < 0.01) continue;
-      const s = p.size * psScale;
-      const y = mod(p.y0 * Hc + T * p.spd * psScale - sy * p.par, Hc) - MARG;
-      const ph = T * p.freq + p.ph;
-      const x = p.x0 * W + Math.sin(ph) * p.amp * psScale + Math.sin(sy * 0.0016 + p.ph) * 28 * p.par;
-      const rot = p.r0 + T * p.rs + Math.sin(ph) * 0.45;
-      let sx = Math.cos(T * p.flip + p.ph * 2);
-      sx = sx >= 0 ? Math.max(sx, .3) : Math.min(sx, -.3);
+    const breath = 1 + Math.sin(T * 1.15) * 0.035;   // Petal Breath ±3.5%
 
-      ctx.save();
-      ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sx, 1);
+    if (dens > 0.002 || mv > 0.002) {
+      const Hc = H + 2 * MARG;
+      for (let i = 0; i < petals.length; i++) {
+        const p = petals[i];
+        const vis = smooth((dens - p.rank) * 12);
+        if (vis < 0.01) continue;
+        const s = p.size * psScale;
+        const y = mod(p.y0 * Hc + T * p.spd * psScale - sy * p.par, Hc) - MARG;
+        const ph = T * p.freq + p.ph;
+        const x = p.x0 * W + Math.sin(ph) * p.amp * psScale + Math.sin(sy * 0.0016 + p.ph) * 28 * p.par;
+        const rot = p.r0 + T * p.rs + Math.sin(ph) * 0.45;
+        let sx = Math.cos(T * p.flip + p.ph * 2);
+        sx = sx >= 0 ? Math.max(sx, .3) : Math.min(sx, -.3);
 
-      /* motion blur nhẹ cho lớp gần — chỉ trên desktop, mobile bỏ để nhẹ GPU */
-      if (!IS_SMALL && p.par > 0.9) {
-        ctx.globalAlpha = p.alpha * vis * 0.28;
-        ctx.drawImage(p.sprite, -s / 2, -s / 2 - s * 0.10, s, s);
-        ctx.globalAlpha = p.alpha * vis * 0.18;
-        ctx.drawImage(p.sprite, -s / 2, -s / 2 - s * 0.20, s, s);
+        ctx.save();
+        ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sx, 1);
+
+        if (!IS_SMALL && p.par > 0.9) {
+          ctx.globalAlpha = p.alpha * vis * breath * 0.28;
+          ctx.drawImage(p.sprite, -s / 2, -s / 2 - s * 0.10, s, s);
+          ctx.globalAlpha = p.alpha * vis * breath * 0.18;
+          ctx.drawImage(p.sprite, -s / 2, -s / 2 - s * 0.20, s, s);
+        }
+        ctx.globalAlpha = p.alpha * vis * breath;
+        ctx.drawImage(p.sprite, -s / 2, -s / 2, s, s);
+        ctx.restore();
       }
-      ctx.globalAlpha = p.alpha * vis;
-      ctx.drawImage(p.sprite, -s / 2, -s / 2, s, s);
-      ctx.restore();
+
+      if (mv > 0.002) {
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < motes.length; i++) {
+          const m = motes[i];
+          const tw = Math.sin(T * m.tw + m.ph);
+          const a = mv * (.25 + .75 * tw * tw) * .9;
+          const s = m.size * psScale;
+          const y = mod(m.y0 * Hc - T * m.rise - sy * .18, Hc) - MARG;
+          const x = m.x0 * W + Math.sin(T * .3 + m.ph) * 14;
+          ctx.globalAlpha = a;
+          ctx.drawImage(moteSprite, x - s / 2, y - s / 2, s, s);
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
     }
 
-    if (mv > 0.002) {
-      ctx.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < motes.length; i++) {
-        const m = motes[i];
-        const tw = Math.sin(T * m.tw + m.ph);
-        const a = mv * (.25 + .75 * tw * tw) * .9;
-        const s = m.size * psScale;
-        const y = mod(m.y0 * Hc - T * m.rise - sy * .18, Hc) - MARG;
-        const x = m.x0 * W + Math.sin(T * .3 + m.ph) * 14;
-        ctx.globalAlpha = a;
-        ctx.drawImage(moteSprite, x - s / 2, y - s / 2, s, s);
+    /* ---- Burst petals (tap-to-bloom) ---- */
+    if (burstQueue.length) {
+      for (let i = burstQueue.length - 1; i >= 0; i--) {
+        const b = burstQueue[i];
+        b.x += b.vx * dt; b.y += b.vy * dt;
+        b.vy += 260 * dt;
+        b.vx *= 0.985; b.vy *= 0.985;
+        b.rot += b.rs * dt;
+        b.life -= dt * 0.55;
+        if (b.life <= 0 || b.y > H + 120) { burstQueue.splice(i, 1); continue; }
+        ctx.globalAlpha = clamp(b.life, 0, 1) * 0.95;
+        ctx.save();
+        ctx.translate(b.x, b.y); ctx.rotate(b.rot);
+        ctx.drawImage(b.sprite, -b.size / 2, -b.size / 2, b.size, b.size);
+        ctx.restore();
       }
-      ctx.globalCompositeOperation = 'source-over';
     }
+
+    /* ---- Confession Rain ---- */
+    if (rainTime > 0) {
+      rainTime -= dt;
+      // spawn
+      const spawnRate = 3.2;
+      for (let i = 0; i < spawnRate; i++) {
+        if (Math.random() < 0.55) {
+          rainPetals.push({
+            x: Math.random() * W,
+            y: -80,
+            vx: (Math.random() - .5) * 60,
+            vy: 90 + Math.random() * 110,
+            rot: Math.random() * 6.28,
+            rs: (Math.random() - .5) * 3.5,
+            size: 24 + Math.random() * 34,
+            sprite: sprites[Math.floor(Math.random() * 4)],
+            sway: Math.random() * 6.28
+          });
+        }
+      }
+      for (let i = rainPetals.length - 1; i >= 0; i--) {
+        const rp = rainPetals[i];
+        rp.x += rp.vx * dt;
+        rp.y += rp.vy * dt;
+        rp.x += Math.sin(rp.y * 0.02 + rp.sway) * 40 * dt;
+        rp.rot += rp.rs * dt;
+        if (rp.y > H + 100) { rainPetals.splice(i, 1); continue; }
+        ctx.globalAlpha = 0.92;
+        ctx.save();
+        ctx.translate(rp.x, rp.y); ctx.rotate(rp.rot);
+        ctx.drawImage(rp.sprite, -rp.size / 2, -rp.size / 2, rp.size, rp.size);
+        ctx.restore();
+      }
+    } else if (rainPetals.length) {
+      // clear dần khi hết rain
+      for (let i = rainPetals.length - 1; i >= 0; i--) {
+        const rp = rainPetals[i];
+        rp.x += rp.vx * dt; rp.y += rp.vy * dt; rp.rot += rp.rs * dt;
+        if (rp.y > H + 100) { rainPetals.splice(i, 1); continue; }
+        ctx.globalAlpha = 0.92;
+        ctx.save();
+        ctx.translate(rp.x, rp.y); ctx.rotate(rp.rot);
+        ctx.drawImage(rp.sprite, -rp.size / 2, -rp.size / 2, rp.size, rp.size);
+        ctx.restore();
+      }
+    }
+
     ctx.globalAlpha = 1;
   }
 
@@ -373,21 +501,25 @@
   }
 
   let lastBloom = -1;
-  function setBloom(bp) {
-    if (Math.abs(bp - lastBloom) < 0.0004) return;
+  let lastPulse = 0;
+  function setBloom(bp, pulse) {
+    const needUpdate = Math.abs(bp - lastBloom) > 0.0004 || Math.abs(pulse - lastPulse) > 0.004;
+    if (!needUpdate) return;
     lastBloom = bp;
+    lastPulse = pulse;
+    const pulseScale = 1 + pulse * 0.10;   // 0..1 → 1.0..1.10
     for (let i = 0; i < roseParts.length; i++) {
       const r = roseParts[i];
       const q = smooth(seg(bp, r.st, r.st + 0.42));
       const ang = lerp(r.a * r.ac, r.a, q);
-      const s = lerp(r.sc0, r.sc1, q);
+      const s = lerp(r.sc0, r.sc1, q) * pulseScale;
       const sy = s * lerp(.88, 1, q);
       r.el.setAttribute('transform', 'translate(' + BLOOM_X + ' ' + BLOOM_Y + ') rotate(' + ang.toFixed(2) + ') scale(' + s.toFixed(3) + ' ' + sy.toFixed(3) + ')');
     }
   }
 
   /* =======================================================
-     CẬP NHẬT CẢNH
+     REVEAL / SCENE
      ======================================================= */
   function reveal(el, v, rise) {
     if (REDUCED) { el.style.opacity = v > 0.5 ? 1 : 0; el.style.transform = ''; return; }
@@ -396,15 +528,19 @@
   }
 
   function setScene(i, o) {
+    sceneOpacity[i] = o;
     const el = sceneEls[i];
     if (o <= 0.003) { el.style.opacity = 0; el.style.visibility = 'hidden'; }
     else { el.style.opacity = o; el.style.visibility = 'visible'; }
   }
 
+  /* =======================================================
+     UPDATE
+     ======================================================= */
   let g = 0;
   let lastBg = '';
 
-  function update(u, T) {
+  function update(u, T, dt) {
     const M = REDUCED ? 0 : 1;
     const ps = [];
     g = 0;
@@ -412,6 +548,17 @@
       const p = clamp((u - B[i]) / (B[i + 1] - B[i]));
       ps.push(p); g += p;
     }
+
+    /* ----- Gyro tilt smooth ----- */
+    if (gyroActive && !REDUCED) {
+      tiltX += (tiltTX - tiltX) * (1 - Math.exp(-dt * 4.5));
+      tiltY += (tiltTY - tiltY) * (1 - Math.exp(-dt * 4.5));
+    } else {
+      tiltX += (0 - tiltX) * (1 - Math.exp(-dt * 4.5));
+      tiltY += (0 - tiltY) * (1 - Math.exp(-dt * 4.5));
+    }
+    const GX = tiltX * 42 * CONFIG.magic.tiltStrength * M;
+    const GY = tiltY * 26 * CONFIG.magic.tiltStrength * M;
 
     /* ----- Nền ----- */
     const bg = bgAt(g);
@@ -422,7 +569,7 @@
       stage.style.setProperty('--bg2', bg[1]);
     }
 
-    /* ----- Letterbox (transform scaleY, KHÔNG đụng height) ----- */
+    /* ----- Letterbox ----- */
     if (E.lbTop && E.lbBot) {
       const lbOpen = smooth(seg(ps[0], 0.02, 0.22)) * (1 - smooth(seg(ps[0], 0.55, 0.90)));
       const lbEnd  = smooth(seg(ps[5], 0.00, 0.20));
@@ -449,23 +596,25 @@
       const o = 1 - smooth(seg(p, .78, 1));
       setScene(0, o);
       if (o > 0.003) {
-        E.openText.style.transform = 'translate3d(0,' + (-p * 60 * M).toFixed(1) + 'px,0) scale(' + (1 + p * .05 * M).toFixed(4) + ')';
-        E.sprig.style.transform = 'translate3d(' + (p * 40 * M).toFixed(1) + 'px,' + (-p * 90 * M).toFixed(1) + 'px,0) rotate(' + (p * 4 * M).toFixed(2) + 'deg)';
+        E.openText.style.transform =
+          'translate3d(' + (GX * 0.3).toFixed(1) + 'px,' + (-p * 60 * M + GY * 0.25).toFixed(1) + 'px,0) scale(' + (1 + p * .05 * M).toFixed(4) + ')';
+        E.sprig.style.transform =
+          'translate3d(' + (p * 40 * M + GX * 0.6).toFixed(1) + 'px,' + (-p * 90 * M + GY * 0.5).toFixed(1) + 'px,0) rotate(' + (p * 4 * M).toFixed(2) + 'deg)';
         E.hint.style.opacity = 1 - seg(p, 0, .12);
       }
     }
 
-    /* ---- 2. PETAL JOURNEY (chỉ còn 1 câu) ---- */
+    /* ---- 2. PETAL JOURNEY ---- */
     {
       const p = ps[1];
       const o = smooth(seg(p, 0, .1)) * (1 - smooth(seg(p, .9, 1)));
       setScene(1, o);
       if (o > 0.003) {
         E.s1cam.style.transform =
-          'scale(' + (1 + .08 * p * M).toFixed(4) + ') rotate(' + (p * 0.8 * M).toFixed(3) + 'deg)';
-        E.b1.style.transform = 'translate3d(' + (p * 40 * M).toFixed(1) + 'px,' + (-p * 220 * M).toFixed(1) + 'px,0)';
-        E.b2.style.transform = 'translate3d(' + (-p * 60 * M).toFixed(1) + 'px,' + (-p * 340 * M).toFixed(1) + 'px,0)';
-        E.b3.style.transform = 'translate3d(' + (p * 80 * M).toFixed(1) + 'px,' + (-p * 460 * M).toFixed(1) + 'px,0)';
+          'translate3d(' + (GX * 0.7).toFixed(1) + 'px,' + (GY * 0.55).toFixed(1) + 'px,0) scale(' + (1 + .08 * p * M).toFixed(4) + ') rotate(' + (p * 0.8 * M + tiltX * 0.4).toFixed(3) + 'deg)';
+        E.b1.style.transform = 'translate3d(' + (p * 40 * M + GX * 0.5).toFixed(1) + 'px,' + (-p * 220 * M + GY * 0.4).toFixed(1) + 'px,0)';
+        E.b2.style.transform = 'translate3d(' + (-p * 60 * M + GX * 0.8).toFixed(1) + 'px,' + (-p * 340 * M + GY * 0.6).toFixed(1) + 'px,0)';
+        E.b3.style.transform = 'translate3d(' + (p * 80 * M + GX * 1.1).toFixed(1) + 'px,' + (-p * 460 * M + GY * 0.9).toFixed(1) + 'px,0)';
         reveal(E.j0, smooth(seg(p, .22, .48)));
       }
     }
@@ -477,9 +626,9 @@
       setScene(2, o);
       if (o > 0.003) {
         const sp = smooth(p);
-        const sc = (1 - (1 - sp) * .14 + seg(p, .85, 1) * .04);
+        const sc = (1 - (1 - sp) * .14 + seg(p, .85, 1) * .04) * (1 + rosePulse * 0.06);
         E.roseWrap.style.transform = REDUCED ? '' :
-          'translate3d(0,' + ((1 - sp) * 28).toFixed(1) + 'px,0) scale(' + sc.toFixed(4) + ') rotate(' + ((1 - sp) * 1.5).toFixed(2) + 'deg)';
+          'translate3d(' + (GX * 0.5).toFixed(1) + 'px,' + ((1 - sp) * 28 + GY * 0.4).toFixed(1) + 'px,0) scale(' + sc.toFixed(4) + ') rotate(' + ((1 - sp) * 1.5 + tiltX * 0.5).toFixed(2) + 'deg)';
 
         const stemP = REDUCED ? 1 : easeOut(seg(p, 0, .24));
         E.stem.style.strokeDashoffset = (1 - stemP).toFixed(4);
@@ -491,11 +640,18 @@
         E.leafL.setAttribute('transform', 'translate(198 548) scale(' + (-Math.max(.001, l2 * 1.3)).toFixed(3) + ' ' + Math.max(.001, l2 * 1.3).toFixed(3) + ') rotate(-38)');
         E.recept.style.opacity = REDUCED ? 1 : seg(p, .2, .32);
 
-        setBloom(REDUCED ? 1 : seg(p, .30, .88));
+        setBloom(REDUCED ? 1 : seg(p, .30, .88), rosePulse);
 
         const gl = REDUCED ? .85 : smooth(seg(p, .45, .95));
         E.glow.style.opacity = (gl * .95).toFixed(3);
-        E.glow.style.transform = 'translate(-50%,-50%) scale(' + (.7 + .5 * gl).toFixed(3) + ')';
+        E.glow.style.transform = 'translate(-50%,-50%) scale(' + (.7 + .5 * gl + rosePulse * 0.15).toFixed(3) + ')';
+
+        // Anamorphic Flare
+        if (E.flare) {
+          const flareV = smooth(seg(p, .78, .92)) * (1 - smooth(seg(p, .90, .99)));
+          E.flare.style.transform = 'translate(-50%,-50%) scaleX(' + (flareV * 1.25).toFixed(3) + ')';
+          E.flare.style.opacity = (flareV * M).toFixed(3);
+        }
 
         reveal(E.bLine, smooth(seg(p, .84, .95)));
       }
@@ -508,7 +664,7 @@
       setScene(3, o);
       if (o > 0.003) {
         E.s3cam.style.transform =
-          'scale(' + (1 + .04 * p * M).toFixed(4) + ') rotate(' + (-p * 0.4 * M).toFixed(3) + 'deg)';
+          'translate3d(' + (GX * 0.35).toFixed(1) + 'px,' + (GY * 0.3).toFixed(1) + 'px,0) scale(' + (1 + .04 * p * M).toFixed(4) + ') rotate(' + (-p * 0.4 * M + tiltX * 0.3).toFixed(3) + 'deg)';
         reveal(E.q0, smooth(seg(p, .28, .42)));
         reveal(E.q1, smooth(seg(p, .48, .62)));
       }
@@ -520,7 +676,8 @@
       const o = smooth(seg(p, .02, .12)) * (1 - smooth(seg(p, .96, 1)));
       setScene(4, o);
       if (o > 0.003) {
-        E.confBox.style.transform = 'translate3d(0,' + (-p * 20 * M).toFixed(1) + 'px,0)';
+        E.confBox.style.transform =
+          'translate3d(' + (GX * 0.4).toFixed(1) + 'px,' + (-p * 20 * M + GY * 0.35).toFixed(1) + 'px,0)';
         reveal(E.c0, smooth(seg(p, .10, .22)));
         reveal(E.c1, smooth(seg(p, .24, .40)));
         reveal(E.c2, smooth(seg(p, .46, .62)));
@@ -554,13 +711,33 @@
         E.restart.tabIndex = bv > .6 ? 0 : -1;
       }
     }
+
+    /* ---- Focus Pull (blur khi giao thoa cảnh) ---- */
+    if (!REDUCED) {
+      let maxMid = 0;
+      for (let i = 0; i < 6; i++) {
+        const o = sceneOpacity[i];
+        if (o > 0.05 && o < 0.95) {
+          const mid = 1 - Math.abs(o - 0.5) * 2;
+          if (mid > maxMid) maxMid = mid;
+        }
+      }
+      const blurPx = maxMid * 3.6;
+      if (Math.abs(blurPx - lastFocusBlur) > 0.05) {
+        lastFocusBlur = blurPx;
+        stage.style.setProperty('--focus', blurPx.toFixed(2) + 'px');
+      }
+    } else if (lastFocusBlur !== 0) {
+      lastFocusBlur = 0;
+      stage.style.setProperty('--focus', '0px');
+    }
   }
 
   /* =======================================================
-     VÒNG LẶP CHÍNH
+     VÒNG LẶP CHÍNH (Spring physics)
      ======================================================= */
   let raf = 0, last = 0, T = 0;
-  let us = 0, lastU = -1, snap = true;
+  let us = 0, usVel = 0, lastU = -1, snap = true;
   let maxScroll = 1;
   let pageVisible = true;
 
@@ -573,22 +750,185 @@
     last = now;
 
     const target = clamp(readScroll() / maxScroll);
-    if (snap || REDUCED) { us = target; snap = false; }
-    else {
-      us += (target - us) * (1 - Math.exp(-dt * 10));
-      if (Math.abs(target - us) < 2e-5) us = target;
+
+    /* ---- Scroll Rubbery ---- */
+    if (snap || REDUCED) {
+      us = target; usVel = 0; snap = false;
+    } else {
+      const k = 165;   // stiffness
+      const c = 22;    // damping — underdamped, có độ nảy nhẹ
+      usVel += (-k * (us - target) - c * usVel) * dt;
+      us += usVel * dt;
+      if (Math.abs(us - target) < 1e-4 && Math.abs(usVel) < 1e-4) {
+        us = target; usVel = 0;
+      }
     }
 
-    if (us !== lastU) { lastU = us; update(us, T); }
+    /* ---- Pulse decay ---- */
+    if (rosePulse > 0) {
+      rosePulse -= dt * 2.2;
+      if (rosePulse < 0) rosePulse = 0;
+    }
+
+    if (us !== lastU || rosePulse > 0) {
+      lastU = us;
+      update(us, T, dt);
+    }
 
     if (!REDUCED) {
       T += dt * stops(g, TSCALE);
-      drawPetals(us * maxScroll, g, T);
+      drawPetals(us * maxScroll, g, T, dt);
     }
 
     if (!REDUCED && pageVisible && !document.hidden) request();
-    else if (us !== target) request();
+    else if (us !== target || burstQueue.length || rainPetals.length || rosePulse > 0) request();
     else last = 0;
+  }
+
+  /* =======================================================
+     MAGIC — GYRO
+     ======================================================= */
+  function bindGyro() {
+    window.addEventListener('deviceorientation', function (e) {
+      if (e.beta == null || e.gamma == null) return;
+      // gamma: -90..90 (trái/phải), beta: -180..180 (trước/sau)
+      tiltTX = clamp(e.gamma / 40, -1, 1);
+      tiltTY = clamp((e.beta - 45) / 40, -1, 1);
+    }, { passive: true });
+  }
+
+  function hideMagicBtn(denied) {
+    if (!E.magicBtn) return;
+    if (denied) {
+      E.magicBtn.classList.add('denied');
+      if (E.magicLabel) E.magicLabel.textContent = CONFIG.magic.deniedLabel;
+      setTimeout(function () { E.magicBtn.classList.add('hidden'); }, 2400);
+    } else {
+      E.magicBtn.classList.add('hidden');
+    }
+  }
+
+  async function enableGyro() {
+    if (gyroActive) return;
+    try {
+      if (gyroNeedsPermission) {
+        const state = await DeviceOrientationEvent.requestPermission();
+        if (state !== 'granted') { hideMagicBtn(true); return; }
+      }
+      bindGyro();
+      gyroActive = true;
+      hideMagicBtn(false);
+    } catch (e) {
+      hideMagicBtn(true);
+    }
+  }
+
+  function setupMagicButton() {
+    if (!E.magicBtn) return;
+    if (!gyroSupported) {
+      // Desktop: ẩn nút
+      E.magicBtn.style.display = 'none';
+      return;
+    }
+    if (!gyroNeedsPermission) {
+      // Android hoặc iOS cũ: bật tự động, ẩn nút
+      bindGyro();
+      gyroActive = true;
+      E.magicBtn.style.display = 'none';
+      return;
+    }
+    // iOS 13+: chờ user tap
+    E.magicBtn.addEventListener('click', function once() {
+      E.magicBtn.removeEventListener('click', once);
+      enableGyro();
+    });
+  }
+
+  /* =======================================================
+     MAGIC — TAP TO BLOOM / HOLD
+     ======================================================= */
+  function showBurstMsg(text, duration) {
+    if (!E.burstMsg) return;
+    E.burstMsg.textContent = text;
+    E.burstMsg.classList.add('show');
+    clearTimeout(burstMsgTimer);
+    burstMsgTimer = setTimeout(function () {
+      E.burstMsg.classList.remove('show');
+    }, duration || 2600);
+  }
+
+  function triggerBurst(count, centerX, centerY, power) {
+    power = power || 1;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+      const spd = (160 + Math.random() * 140) * power;
+      burstQueue.push({
+        x: centerX + (Math.random() - .5) * 30,
+        y: centerY + (Math.random() - .5) * 30,
+        vx: Math.cos(a) * spd,
+        vy: Math.sin(a) * spd - 90,
+        rot: Math.random() * 6.28,
+        rs: (Math.random() - .5) * 4.5,
+        life: 1,
+        size: 30 + Math.random() * 26,
+        sprite: sprites[Math.floor(Math.random() * sprites.length)]
+      });
+    }
+  }
+
+  function onRoseTap() {
+    rosePulse = 1.0;
+    tapCount++;
+    triggerBurst(16, W / 2, H * 0.42, 1);
+    const texts = CONFIG.magic.tapTexts;
+    if (tapCount <= texts.length) {
+      showBurstMsg(texts[tapCount - 1], 2400);
+    } else {
+      showBurstMsg('chị chọc e hoài à >.<', 2000);
+    }
+    // Đủ số lần → mưa cánh hoa
+    if (tapCount === CONFIG.magic.tapRequiredForRain) {
+      rainTime = 6.0;
+      setTimeout(function () {
+        showBurstMsg('e thích chị thật đó, hong có đùa đâu', 3200);
+      }, 900);
+    }
+  }
+
+  function onRoseHold() {
+    rosePulse = 1.0;
+    triggerBurst(34, W / 2, H * 0.42, 1.5);
+    showBurstMsg(CONFIG.magic.holdText, 3200);
+    rainTime = 4.0;
+  }
+
+  function setupRoseHit() {
+    if (!E.roseHit) return;
+    const startHold = function () {
+      holdFired = false;
+      clearTimeout(holdTimer);
+      holdTimer = setTimeout(function () {
+        holdFired = true;
+        onRoseHold();
+      }, CONFIG.magic.holdMs);
+    };
+    const cancelHold = function () { clearTimeout(holdTimer); };
+    const endHold = function () {
+      clearTimeout(holdTimer);
+      if (!holdFired) {
+        // Chỉ tap nếu hoa đã nở
+        if (sceneOpacity[2] > 0.55 && u2Phase() > 0.5) onRoseTap();
+      }
+    };
+    E.roseHit.addEventListener('pointerdown', startHold);
+    E.roseHit.addEventListener('pointerup', endHold);
+    E.roseHit.addEventListener('pointercancel', cancelHold);
+    E.roseHit.addEventListener('pointerleave', cancelHold);
+  }
+
+  function u2Phase() {
+    // Tiến độ cục bộ của scene bloom
+    return clamp((us - B[2]) / (B[3] - B[2]));
   }
 
   /* =======================================================
@@ -605,9 +945,9 @@
       canvas.style.height = H + 'px';
       psScale = clamp(Math.min(W, H) / 720, .62, 1.15);
       const nowSmall = Math.min(W, H) < 600;
-      if (nowSmall !== IS_SMALL) buildPetals();   // đổi thiết bị → dựng lại bố cục cánh hoa
-      if (REDUCED) drawPetals(0, 0, 0, .26);
-      else drawPetals(us * maxScroll, g, T);
+      if (nowSmall !== IS_SMALL) buildPetals();
+      if (REDUCED) drawPetals(0, 0, 0, .016, .26);
+      else drawPetals(us * maxScroll, g, T, .016);
     }
     lastU = -1;
     request();
@@ -621,6 +961,8 @@
     renderText();
     buildRose();
     buildPetals();
+    setupMagicButton();
+    setupRoseHit();
     resize(true);
 
     let rt = 0;
@@ -645,7 +987,8 @@
       stage.classList.add('fading');
       setTimeout(function () {
         window.scrollTo(0, 0);
-        snap = true; lastU = -1; lastBloom = -1;
+        snap = true; usVel = 0; lastU = -1; lastBloom = -1;
+        tapCount = 0; rosePulse = 0; burstQueue.length = 0; rainPetals.length = 0; rainTime = 0;
         ['oName', 'oSub'].forEach(function (id) {
           const el = $(id);
           el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
