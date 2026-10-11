@@ -1,5 +1,5 @@
 /* =========================================================
-   GỬI CHỊ TRÂM — style.css
+   GỬI CHỊ TRÂM — style.css  (cinematic upgrade)
    Bảng màu: hồng phấn, dusty rose, hồng đậm vừa, trắng kem, vàng ấm
    ========================================================= */
 
@@ -14,6 +14,7 @@
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
   --bg1: #fdf1ec;
   --bg2: #f7dcd9;
+  --cine: cubic-bezier(.22, .61, .36, 1);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -26,6 +27,7 @@ body {
   background: var(--bg1);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
 /* Chiều cao thật được JS đặt lại theo CONFIG.scrollWeights; đây chỉ là giá trị dự phòng */
@@ -36,7 +38,10 @@ body {
   position: sticky; top: 0;
   height: 100vh; height: 100svh;
   overflow: hidden;
-  transition: opacity .6s ease;
+  transition: opacity .8s var(--cine);
+  isolation: isolate;
+  transform: translateZ(0);              /* ép GPU layer, mượt hơn trên iPhone */
+  -webkit-backface-visibility: hidden;
 }
 .stage.fading { opacity: 0; }
 
@@ -44,19 +49,69 @@ body {
   position: absolute; inset: 0; z-index: 0;
   background: linear-gradient(180deg, var(--bg1), var(--bg2));
 }
-#petals { position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+
+/* ---------- Film grain (texture điện ảnh) ---------- */
+#grain {
+  position: absolute; inset: -50%;
+  z-index: 5; pointer-events: none;
+  opacity: .07; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation: grain 7s steps(6) infinite;
+  will-change: transform;
+}
+@keyframes grain {
+  0%   { transform: translate3d(0,0,0); }
+  20%  { transform: translate3d(-2%,-3%,0); }
+  40%  { transform: translate3d(3%,2%,0); }
+  60%  { transform: translate3d(-3%,1%,0); }
+  80%  { transform: translate3d(2%,-2%,0); }
+  100% { transform: translate3d(0,0,0); }
+}
+.reduced #grain { animation: none; }
+
+/* ---------- Letterbox điện ảnh ---------- */
+.letterbox {
+  position: absolute; left: 0; right: 0;
+  height: 0; background: #0a0507;
+  z-index: 6; pointer-events: none;
+  will-change: height;
+}
+.letterbox.top { top: 0; }
+.letterbox.bottom { bottom: 0; }
+
+/* ---------- Lens leak (vệt sáng ấm) ---------- */
+.leak {
+  position: absolute; pointer-events: none; z-index: 1;
+  border-radius: 50%;
+  filter: blur(55px);
+  opacity: 0; will-change: transform, opacity;
+}
+.leak.l1 {
+  width: 70vmax; height: 70vmax; top: -25vmax; right: -25vmax;
+  background: radial-gradient(circle, rgba(255,206,140,.6), rgba(255,206,140,0) 65%);
+}
+.leak.l2 {
+  width: 80vmax; height: 80vmax; bottom: -30vmax; left: -30vmax;
+  background: radial-gradient(circle, rgba(255,170,180,.45), rgba(255,170,180,0) 65%);
+}
+
+#petals { position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+
 #vignette {
-  position: absolute; inset: 0; z-index: 1; pointer-events: none;
-  background: radial-gradient(ellipse at 50% 45%, rgba(255,255,255,0) 55%, rgba(122,45,70,.10) 100%);
+  position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(255,255,255,0) 38%, rgba(122,45,70,.14) 82%, rgba(60,16,32,.32) 100%),
+    linear-gradient(180deg, rgba(74,38,48,.06), rgba(74,38,48,0) 18%, rgba(74,38,48,0) 82%, rgba(74,38,48,.10));
 }
 
 /* ---------- Cảnh ---------- */
 .scene {
-  position: absolute; inset: 0; z-index: 2;
+  position: absolute; inset: 0; z-index: 4;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center;
   padding: calc(env(safe-area-inset-top, 0px) + 28px) 26px calc(env(safe-area-inset-bottom, 0px) + 28px);
   opacity: 0; visibility: hidden; pointer-events: none;
+  will-change: opacity;
 }
 #s0 { opacity: 1; visibility: visible; } /* tránh nháy trước khi JS chạy */
 .scene.light { color: #fff1ea; }
@@ -67,7 +122,9 @@ body {
   font-weight: 400;
   max-width: 21em;
   text-wrap: balance;
+  text-shadow: 0 1px 22px rgba(74,38,48,.10), 0 1px 2px rgba(74,38,48,.06);
 }
+.scene.light .line { text-shadow: 0 2px 32px rgba(0,0,0,.40), 0 1px 2px rgba(0,0,0,.20); }
 .cam { will-change: transform; }
 #s1 .line + .line { margin-top: .9em; }
 
@@ -77,26 +134,32 @@ body {
 /* ---------- 1. Opening ---------- */
 .open-text { position: relative; will-change: transform; }
 .intro-line {
-  opacity: 0; transform: translateY(16px);
-  animation: introIn 1.8s cubic-bezier(.2,.7,.2,1) var(--d, 0s) forwards;
+  opacity: 0; transform: translateY(22px) scale(.98);
+  filter: blur(6px);
+  animation: introIn 2.4s var(--cine) var(--d, 0s) forwards;
 }
 .name {
   font-size: clamp(2.8rem, 13vw, 5.2rem);
   font-style: italic; color: var(--deep);
   letter-spacing: -.01em; line-height: 1.05;
+  text-shadow: 0 6px 50px rgba(138,47,72,.25), 0 1px 2px rgba(138,47,72,.10);
 }
 .sub { margin-top: .55em; font-size: clamp(1.2rem, 5vw, 1.8rem); color: var(--ink); }
-@keyframes introIn { to { opacity: 1; transform: none; } }
+@keyframes introIn {
+  0%   { opacity: 0; transform: translateY(22px) scale(.98); filter: blur(6px); }
+  100% { opacity: 1; transform: none; filter: blur(0); }
+}
 
 .sprig {
   position: absolute; top: -2svh; right: -6vw;
   width: min(92vw, 560px); aspect-ratio: 4 / 5;
   will-change: transform; pointer-events: none;
+  filter: drop-shadow(0 20px 40px rgba(122,45,70,.15));
 }
 .sprig svg {
   width: 100%; height: 100%; overflow: visible;
   transform-origin: 100% 0%;
-  animation: sway 9s ease-in-out infinite;
+  animation: sway 10s ease-in-out infinite;
 }
 @keyframes sway { 0%, 100% { transform: rotate(-1.4deg); } 50% { transform: rotate(1.6deg); } }
 
@@ -108,40 +171,45 @@ body {
 .hint-in {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   font-size: .78rem; letter-spacing: .28em; text-transform: uppercase; color: #9a5a68;
-  opacity: 0; animation: fadeIn 1.4s ease 4s forwards;
+  opacity: 0; animation: fadeIn 1.6s var(--cine) 4s forwards;
 }
 .hint-line {
   display: block; width: 1px; height: 38px; transform-origin: top;
   background: linear-gradient(to bottom, #b8475f, rgba(184,71,95,0));
-  animation: hintDrop 2.6s ease-in-out infinite;
+  animation: hintDrop 2.8s ease-in-out infinite;
 }
 @keyframes fadeIn { to { opacity: 1; } }
 @keyframes hintDrop { 0% { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
 
 /* ---------- 2. Petal journey ---------- */
-.blob { position: absolute; border-radius: 50%; pointer-events: none; will-change: transform; }
-.b1 { width: 70vmax; height: 70vmax; left: -28vmax; top: 8%;  background: radial-gradient(circle, rgba(255,238,216,.65), rgba(255,238,216,0) 62%); }
-.b2 { width: 60vmax; height: 60vmax; right: -26vmax; top: 38%; background: radial-gradient(circle, rgba(255,214,222,.55), rgba(255,214,222,0) 62%); }
-.b3 { width: 48vmax; height: 48vmax; left: 10%; top: 70%;  background: radial-gradient(circle, rgba(255,226,176,.45), rgba(255,226,176,0) 62%); }
+.blob {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  will-change: transform;
+}
+.b1 { width: 70vmax; height: 70vmax; left: -28vmax; top: 8%;  background: radial-gradient(circle, rgba(255,238,216,.70), rgba(255,238,216,0) 62%); filter: blur(50px); }
+.b2 { width: 60vmax; height: 60vmax; right: -26vmax; top: 38%; background: radial-gradient(circle, rgba(255,214,222,.60), rgba(255,214,222,0) 62%); filter: blur(45px); }
+.b3 { width: 48vmax; height: 48vmax; left: 10%; top: 70%;  background: radial-gradient(circle, rgba(255,226,176,.50), rgba(255,226,176,0) 62%); filter: blur(40px); }
 
 /* ---------- 3. Bloom ---------- */
 .glow {
   position: absolute; left: 50%; top: 42%;
   width: min(150vw, 1100px); aspect-ratio: 1;
   transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(255,219,160,.78) 0%, rgba(255,196,170,.4) 28%, rgba(255,196,190,0) 62%);
+  background: radial-gradient(circle, rgba(255,219,160,.85) 0%, rgba(255,196,170,.45) 28%, rgba(255,196,190,0) 62%);
   opacity: 0; pointer-events: none; will-change: transform, opacity;
+  filter: blur(18px);
 }
 .rose-wrap {
   position: relative;
   height: min(70svh, 138vw); aspect-ratio: 400 / 640;
   margin-top: -4svh;
   transform-origin: 50% 60%; will-change: transform;
+  filter: drop-shadow(0 30px 60px rgba(122,45,70,.20));
 }
 .rose-wrap svg {
   width: 100%; height: 100%; overflow: visible;
   transform-origin: 50% 98%;
-  animation: roseSway 7s ease-in-out infinite;
+  animation: roseSway 8s ease-in-out infinite;
 }
 @keyframes roseSway { 0%, 100% { transform: rotate(-.8deg); } 50% { transform: rotate(.9deg); } }
 .bloom-line {
@@ -160,13 +228,23 @@ body {
 .c-name {
   font-size: clamp(2.1rem, 8.6vw, 3.1rem);
   font-style: italic; color: var(--deep); line-height: 1.15; margin-bottom: .6em;
+  text-shadow: 0 4px 40px rgba(138,47,72,.15);
 }
 .c-line { font-size: clamp(1.12rem, 4.5vw, 1.5rem); line-height: 1.65; margin-bottom: .95em; }
 .c-line.soft { color: #6a3a48; }
-.rule { display: block; width: 44px; height: 1px; margin: 1.5em auto 0; background: var(--gold); transform-origin: center; will-change: transform, opacity; }
+.rule {
+  display: block; width: 44px; height: 1px; margin: 1.5em auto 0;
+  background: var(--gold);
+  transform-origin: center; will-change: transform, opacity;
+  box-shadow: 0 0 12px rgba(226,182,106,.65);
+}
 
 /* ---------- 6. Ending ---------- */
-.fall { position: absolute; left: 50%; top: 0; width: 84px; margin-left: -42px; will-change: transform, opacity; }
+.fall {
+  position: absolute; left: 50%; top: 0; width: 84px; margin-left: -42px;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 20px 40px rgba(122,45,70,.30));
+}
 .thanks { font-size: clamp(1.2rem, 4.8vw, 1.7rem); font-style: italic; color: var(--deep); position: relative; }
 .btn {
   position: relative; margin-top: 2.2em;
@@ -176,18 +254,21 @@ body {
   color: var(--deep); background: rgba(255,244,238,.55);
   cursor: pointer; pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
-  transition: background-color .25s ease, color .25s ease, box-shadow .25s ease;
+  box-shadow: 0 6px 24px rgba(184,71,95,.10);
+  transition: background-color .3s var(--cine), color .3s var(--cine),
+              box-shadow .3s var(--cine), transform .3s var(--cine);
 }
-.btn:hover { background: var(--rose); color: var(--cream); }
+.btn:hover { background: var(--rose); color: var(--cream); box-shadow: 0 8px 30px rgba(184,71,95,.35); transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(.98); }
 .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(226,182,106,.8); }
 
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .intro-line { animation: none; opacity: 1; transform: none; }
+  .intro-line { animation: none; opacity: 1; transform: none; filter: none; }
   .hint-in { animation: none; opacity: 1; }
-  .hint-line, .sprig svg, .rose-wrap svg { animation: none; }
+  .hint-line, .sprig svg, .rose-wrap svg, #grain { animation: none; }
   .stage { transition: none; }
 }
-.reduced .intro-line { animation: none; opacity: 1; transform: none; }
+.reduced .intro-line { animation: none; opacity: 1; transform: none; filter: none; }
 .reduced .hint-in { animation: none; opacity: 1; }
-.reduced .hint-line, .reduced .sprig svg, .reduced .rose-wrap svg { animation: none; }
+.reduced .hint-line, .reduced .sprig svg, .reduced .rose-wrap svg, .reduced #grain { animation: none; }
