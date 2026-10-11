@@ -37,9 +37,8 @@
     // Nội dung tỏ tình: giữ đúng 4 dòng, theo thứ tự
     confession: [
       'Chị Trâm,',
-      'Em tự làm món quà ó :))),
       'Em thích chị. Em chỉ muốn chị biết điều đó thôi.',
-      '>.<'
+      'Chị không cần trả lời liền đâu ó >.<'
     ],
 
     ending: {
