@@ -1,17 +1,11 @@
 /* =========================================================
-   GỬI CHỊ TRÂM — script.js
-   Kiến trúc:
-   - 1 sân khấu sticky, 6 cảnh xếp chồng.
-   - Mọi trạng thái hình ảnh là HÀM THUẦN của tiến độ cuộn (u),
-     nên cuộn nhanh / cuộn ngược đều ổn định, không reset sai.
-   - 1 vòng requestAnimationFrame: làm mượt u, cập nhật cảnh khi u đổi,
-     vẽ cánh hoa lên canvas (không tạo hàng trăm phần tử DOM).
+   GỬI CHỊ TRÂM — script.js  (cinematic + iPhone optimized)
    ========================================================= */
 (function () {
   'use strict';
 
   /* =======================================================
-     CONFIG — sửa toàn bộ câu chữ và nhịp cuộn tại đây
+     CONFIG
      ======================================================= */
   const CONFIG = {
     pageTitle: 'uhhh Hello chị ;-;',
@@ -23,7 +17,6 @@
     },
 
     journey: [
-      'thoi ngại lắm ;-; ',
       'thoi nói đại lunn'
     ],
 
@@ -34,7 +27,6 @@
       'em tự làm é :>'
     ],
 
-    // Nội dung tỏ tình: giữ đúng 4 dòng, theo thứ tự
     confession: [
       'Chị Trâm,',
       'Em thích chị. Em chỉ muốn chị biết điều đó thôi.',
@@ -42,12 +34,10 @@
     ],
 
     ending: {
-      thanks: 'Úi sời thấy web ngầu khum chị :D',
+      thanks: 'vậy thôi e nói hết gòi é',
       button: 'Xem lại'
     },
 
-    // Độ dài cuộn của từng cảnh (đơn vị: chiều cao màn hình).
-    // Thứ tự: Opening, Petal journey, Bloom, Quiet, Confession, Ending
     scrollWeights: [1, 2.4, 3.2, 1.6, 3, 1.6]
   };
 
@@ -58,11 +48,10 @@
   const lerp = (a, b, t) => a + (b - a) * t;
   const smooth = (t) => { t = clamp(t); return t * t * (3 - 2 * t); };
   const easeOut = (t) => 1 - Math.pow(1 - clamp(t), 3);
-  const seg = (p, a, b) => clamp((p - a) / (b - a));     // đoạn [a,b] của p → 0..1
+  const seg = (p, a, b) => clamp((p - a) / (b - a));
   const mod = (a, n) => ((a % n) + n) % n;
   const $ = (id) => document.getElementById(id);
 
-  // Nội suy tuyến tính theo bảng [[x, y], ...]
   function stops(x, arr) {
     if (x <= arr[0][0]) return arr[0][1];
     for (let i = 1; i < arr.length; i++) {
@@ -79,7 +68,6 @@
     return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
   }
 
-  // PRNG có seed: cánh hoa luôn có cùng bố cục mỗi lần tải
   function mulberry32(a) {
     return function () {
       a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -106,11 +94,13 @@
     recept: $('recept'), petalsG: $('petalsG'), glow: $('bloomGlow'), bLine: $('bLine'),
     s3cam: $('s3cam'), q0: $('q0'), q1: $('q1'),
     confBox: $('confBox'), c0: $('c0'), c1: $('c1'), c2: $('c2'), c3: $('c3'), rule: $('rule'),
-    fall: $('fall'), thanks: $('thanks'), restart: $('restart')
+    fall: $('fall'), thanks: $('thanks'), restart: $('restart'),
+    lbTop: $('lbTop'), lbBot: $('lbBot'),
+    leak1: $('leak1'), leak2: $('leak2')
   };
 
   /* =======================================================
-     NỘI DUNG — đổ chữ từ CONFIG (dùng textContent, an toàn)
+     NỘI DUNG
      ======================================================= */
   function renderText() {
     document.title = CONFIG.pageTitle;
@@ -145,24 +135,19 @@
 
   /* =======================================================
      CHIA CẢNH THEO TIẾN ĐỘ CUỘN
-     u = scrollY / maxScroll  ∈ [0,1]
-     Cảnh i chiếm [B[i], B[i+1]] của u. p_i = tiến độ cục bộ.
-     g = Σ p_i  (0..6) = "vị trí điện ảnh" liên tục toàn trang
      ======================================================= */
   const WSUM = CONFIG.scrollWeights.reduce(function (a, b) { return a + b; }, 0);
   const B = [0];
   CONFIG.scrollWeights.forEach(function (w) { B.push(B[B.length - 1] + w / WSUM); });
   B[B.length - 1] = 1;
 
-  // Chiều cao trang = (tổng cuộn + 1 màn hình) — ưu tiên svh để ổn định trên điện thoại
   (function setPageHeight() {
     let unit = 'vh';
     try { if (window.CSS && CSS.supports && CSS.supports('height', '1svh')) unit = 'svh'; } catch (e) {}
     scrollEl.style.height = ((WSUM + 1) * 100) + unit;
   })();
 
-  /* ----- Bảng điều khiển theo g ----- */
-  // Màu nền [g, màu trên, màu dưới]: sáng → hồng → ấm (bloom) → hoàng hôn (quiet) → kem sáng (confession)
+  /* ----- Bảng màu nền theo g ----- */
   const BG_STOPS = [
     [0,    '#fdf1ec', '#f7dcd9'],
     [1,    '#fbe9e4', '#f0c8cd'],
@@ -188,20 +173,18 @@
     return [mix(a[1], b[1]), mix(a[2], b[2])];
   }
 
-  // Mật độ cánh hoa, tốc độ thời gian, hạt sáng — theo g
-  const DENS = [[0, .10], [.6, .14], [1, .30], [1.35, .9], [1.8, .95], [2, .55], [2.5, .28], [3, .22], [3.4, .10], [4, .05], [4.2, .07], [5, .05], [5.4, .02], [6, 0]];
+  const DENS   = [[0, .10], [.6, .14], [1, .30], [1.35, .9], [1.8, .95], [2, .55], [2.5, .28], [3, .22], [3.4, .10], [4, .05], [4.2, .07], [5, .05], [5.4, .02], [6, 0]];
   const TSCALE = [[0, .7], [1, 1], [1.6, 1.5], [2, 1], [3, .6], [3.5, .3], [4, .2], [6, .2]];
-  const MOTE = [[0, 0], [2.2, 0], [2.6, .7], [3, 1], [3.7, .9], [3.95, 0], [6, 0]];
+  const MOTE   = [[0, 0], [2.2, 0], [2.6, .7], [3, 1], [3.7, .9], [3.95, 0], [6, 0]];
 
   /* =======================================================
-     CÁNH HOA TRÊN CANVAS (parallax 3 lớp + hạt sáng vàng)
-     Vị trí = hàm thuần của (thời gian T, cuộn sy) → cuộn ngược vẫn mượt.
+     CÁNH HOA TRÊN CANVAS
      ======================================================= */
   const SPRITE_COLORS = [
-    ['#fcdde1', '#ec9fb0'],   // 0 hồng phấn
-    ['#efb0bc', '#c4627b'],   // 1 dusty rose
-    ['#e08a9e', '#a53b57'],   // 2 hồng đậm
-    ['#fff3ea', '#f4c7c6']    // 3 trắng kem
+    ['#fcdde1', '#ec9fb0'],
+    ['#efb0bc', '#c4627b'],
+    ['#e08a9e', '#a53b57'],
+    ['#fff3ea', '#f4c7c6']
   ];
 
   function makeSprite(top, base) {
@@ -244,6 +227,7 @@
   let sprites = [], moteSprite = null;
   const MARG = 100;
   let W = 0, H = 0, dpr = 1, psScale = 1;
+  let IS_SMALL = false;
 
   function buildPetals() {
     petals.length = 0; motes.length = 0;
@@ -251,8 +235,8 @@
     sprites = SPRITE_COLORS.map(function (c) { return makeSprite(c[0], c[1]); });
     moteSprite = makeGlowSprite();
 
-    const small = Math.min(window.innerWidth, window.innerHeight) < 600;
-    const counts = small ? [10, 9, 4] : [18, 16, 8];
+    IS_SMALL = Math.min(window.innerWidth, window.innerHeight) < 600;
+    const counts = IS_SMALL ? [8, 7, 3] : [18, 16, 8];
     const rnd = mulberry32(20240214);
     const LAYERS = [
       { size: [13, 20], alpha: .5,  par: .28, spd: [9, 16],  amp: [10, 28], pick: [3, 0] },
@@ -275,7 +259,6 @@
         });
       }
     });
-    // Mỗi cánh có một "thứ hạng" ngẫu nhiên: mật độ tăng thì hiện dần theo thứ hạng
     const order = petals.map(function (_, i) { return i; });
     for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(rnd() * (i + 1));
@@ -283,7 +266,7 @@
     }
     order.forEach(function (idx, r) { petals[idx].rank = r / order.length; });
 
-    const mc = small ? 10 : 16;
+    const mc = IS_SMALL ? 8 : 16;
     for (let i = 0; i < mc; i++) {
       motes.push({
         x0: rnd(), y0: rnd(), size: lerp(7, 15, rnd()),
@@ -310,16 +293,26 @@
       const ph = T * p.freq + p.ph;
       const x = p.x0 * W + Math.sin(ph) * p.amp * psScale + Math.sin(sy * 0.0016 + p.ph) * 28 * p.par;
       const rot = p.r0 + T * p.rs + Math.sin(ph) * 0.45;
-      let sx = Math.cos(T * p.flip + p.ph * 2);           // lật 3D giả lập
+      let sx = Math.cos(T * p.flip + p.ph * 2);
       sx = sx >= 0 ? Math.max(sx, .3) : Math.min(sx, -.3);
-      ctx.globalAlpha = p.alpha * vis;
+
       ctx.save();
       ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sx, 1);
+
+      /* motion blur nhẹ cho lớp gần — chỉ trên desktop, mobile bỏ để nhẹ GPU */
+      if (!IS_SMALL && p.par > 0.9) {
+        ctx.globalAlpha = p.alpha * vis * 0.28;
+        ctx.drawImage(p.sprite, -s / 2, -s / 2 - s * 0.10, s, s);
+        ctx.globalAlpha = p.alpha * vis * 0.18;
+        ctx.drawImage(p.sprite, -s / 2, -s / 2 - s * 0.20, s, s);
+      }
+      ctx.globalAlpha = p.alpha * vis;
       ctx.drawImage(p.sprite, -s / 2, -s / 2, s, s);
       ctx.restore();
     }
 
     if (mv > 0.002) {
+      ctx.globalCompositeOperation = 'lighter';
       for (let i = 0; i < motes.length; i++) {
         const m = motes[i];
         const tw = Math.sin(T * m.tw + m.ph);
@@ -330,30 +323,30 @@
         ctx.globalAlpha = a;
         ctx.drawImage(moteSprite, x - s / 2, y - s / 2, s, s);
       }
+      ctx.globalCompositeOperation = 'source-over';
     }
     ctx.globalAlpha = 1;
   }
 
   /* =======================================================
-     HOA HỒNG SVG — dựng từ các cánh tự vẽ, mở theo tiến độ cuộn
+     HOA HỒNG SVG
      ======================================================= */
   const SVGNS = 'http://www.w3.org/2000/svg';
   const PETAL_D = 'M0 0 C-58 -14 -74 -78 -40 -116 C-20 -138 20 -138 40 -116 C74 -78 58 -14 0 0Z';
   const BLOOM_X = 200, BLOOM_Y = 312;
 
-  // sc: [thu nhỏ khi búp, đầy đủ khi nở]; aClosed: hệ số góc khi búp; start: thời điểm bắt đầu mở (vòng ngoài mở trước)
   const RINGS = [
     { grad: 'gRing0', sc: [.74, 1.0],  angles: [-98, -66, -34, -2, 30, 62, 94], aClosed: .16, start: 0 },
     { grad: 'gRing1', sc: [.58, .8],   angles: [-64, -32, 0, 32, 64],           aClosed: .20, start: .14 },
     { grad: 'gRing2', sc: [.46, .6],   angles: [-42, -14, 14, 42],              aClosed: .22, start: .28 },
     { grad: 'gRing3', sc: [.34, .4],   angles: [-16, 6, 26],                    aClosed: .30, start: .40 }
   ];
-  const roseParts = [];   // { el, a, sc0, sc1, ac, st }
+  const roseParts = [];
 
   function buildRose() {
     RINGS.forEach(function (ring, ri) {
       const list = ring.angles.map(function (a, j) { return { a: a, j: j }; });
-      list.sort(function (x, y) { return Math.abs(y.a) - Math.abs(x.a); });  // cánh ngoài cùng vẽ trước (nằm sau)
+      list.sort(function (x, y) { return Math.abs(y.a) - Math.abs(x.a); });
       list.forEach(function (it) {
         const el = document.createElementNS(SVGNS, 'path');
         el.setAttribute('d', PETAL_D);
@@ -362,14 +355,14 @@
         el.setAttribute('stroke-width', '.9');
         el.setAttribute('stroke-linejoin', 'round');
         E.petalsG.appendChild(el);
-        const jitter = 0.94 + (((it.j * 37 + ri * 13) % 10) / 10) * 0.12;   // chênh nhẹ cho tự nhiên
+        const jitter = 0.94 + (((it.j * 37 + ri * 13) % 10) / 10) * 0.12;
         roseParts.push({
           el: el, a: it.a, ac: ring.aClosed,
           sc0: ring.sc[0] * jitter, sc1: ring.sc[1] * jitter,
           st: ring.start + (it.j / ring.angles.length) * 0.12
         });
       });
-      if (ri === 2) {   // bóng tối nhẹ ở tim hoa, nằm giữa vòng 3 và lõi
+      if (ri === 2) {
         const sh = document.createElementNS(SVGNS, 'ellipse');
         sh.setAttribute('cx', BLOOM_X); sh.setAttribute('cy', BLOOM_Y - 40);
         sh.setAttribute('rx', 26); sh.setAttribute('ry', 22);
@@ -394,9 +387,8 @@
   }
 
   /* =======================================================
-     CẬP NHẬT CẢNH THEO TIẾN ĐỘ
+     CẬP NHẬT CẢNH
      ======================================================= */
-  // Hiện/ẩn một dòng chữ theo v ∈ [0,1]. Reduced-motion: chỉ fade đơn giản (CSS transition).
   function reveal(el, v, rise) {
     if (REDUCED) { el.style.opacity = v > 0.5 ? 1 : 0; el.style.transform = ''; return; }
     el.style.opacity = v;
@@ -409,11 +401,11 @@
     else { el.style.opacity = o; el.style.visibility = 'visible'; }
   }
 
-  let g = 0;           // vị trí điện ảnh 0..6
+  let g = 0;
   let lastBg = '';
 
-  function update(u) {
-    const M = REDUCED ? 0 : 1;                 // hệ số chuyển động (0 = chỉ fade)
+  function update(u, T) {
+    const M = REDUCED ? 0 : 1;
     const ps = [];
     g = 0;
     for (let i = 0; i < 6; i++) {
@@ -421,7 +413,7 @@
       ps.push(p); g += p;
     }
 
-    // Nền đổi theo g
+    /* ----- Nền ----- */
     const bg = bgAt(g);
     const key = bg[0] + bg[1];
     if (key !== lastBg) {
@@ -430,7 +422,28 @@
       stage.style.setProperty('--bg2', bg[1]);
     }
 
-    /* ---- 1. OPENING: zoom nhẹ, nhành hoa trôi lên, chữ mờ dần ---- */
+    /* ----- Letterbox (transform scaleY, KHÔNG đụng height) ----- */
+    if (E.lbTop && E.lbBot) {
+      const lbOpen = smooth(seg(ps[0], 0.02, 0.22)) * (1 - smooth(seg(ps[0], 0.55, 0.90)));
+      const lbEnd  = smooth(seg(ps[5], 0.00, 0.20));
+      const lbScale = Math.max(lbOpen, lbEnd);
+      E.lbTop.style.transform = 'translateZ(0) scaleY(' + lbScale.toFixed(4) + ')';
+      E.lbBot.style.transform = 'translateZ(0) scaleY(' + lbScale.toFixed(4) + ')';
+    }
+
+    /* ----- Lens leak ----- */
+    if (E.leak1 && E.leak2) {
+      const l1 = smooth(seg(g, 1.2, 2.0)) * (1 - smooth(seg(g, 3.0, 3.5)));
+      const l2 = smooth(seg(g, 2.3, 2.9)) * (1 - smooth(seg(g, 3.5, 4.0)));
+      E.leak1.style.opacity = (l1 * 0.8 * M).toFixed(3);
+      E.leak2.style.opacity = (l2 * 0.7 * M).toFixed(3);
+      if (!REDUCED) {
+        E.leak1.style.transform = 'translate3d(' + (Math.sin(T * 0.25) * 22).toFixed(1) + 'px,' + (Math.cos(T * 0.18) * 22).toFixed(1) + 'px,0)';
+        E.leak2.style.transform = 'translate3d(' + (Math.cos(T * 0.22) * 24).toFixed(1) + 'px,' + (Math.sin(T * 0.15) * 24).toFixed(1) + 'px,0)';
+      }
+    }
+
+    /* ---- 1. OPENING ---- */
     {
       const p = ps[0];
       const o = 1 - smooth(seg(p, .78, 1));
@@ -442,22 +455,22 @@
       }
     }
 
-    /* ---- 2. PETAL JOURNEY: camera trôi chậm, vệt sáng parallax ---- */
+    /* ---- 2. PETAL JOURNEY (chỉ còn 1 câu) ---- */
     {
       const p = ps[1];
       const o = smooth(seg(p, 0, .1)) * (1 - smooth(seg(p, .9, 1)));
       setScene(1, o);
       if (o > 0.003) {
-        E.s1cam.style.transform = 'scale(' + (1 + .08 * p * M).toFixed(4) + ')';
+        E.s1cam.style.transform =
+          'scale(' + (1 + .08 * p * M).toFixed(4) + ') rotate(' + (p * 0.8 * M).toFixed(3) + 'deg)';
         E.b1.style.transform = 'translate3d(' + (p * 40 * M).toFixed(1) + 'px,' + (-p * 220 * M).toFixed(1) + 'px,0)';
         E.b2.style.transform = 'translate3d(' + (-p * 60 * M).toFixed(1) + 'px,' + (-p * 340 * M).toFixed(1) + 'px,0)';
         E.b3.style.transform = 'translate3d(' + (p * 80 * M).toFixed(1) + 'px,' + (-p * 460 * M).toFixed(1) + 'px,0)';
-        reveal(E.j0, smooth(seg(p, .14, .30)));
-        reveal(E.j1, smooth(seg(p, .42, .58)));
+        reveal(E.j0, smooth(seg(p, .22, .48)));
       }
     }
 
-    /* ---- 3. BLOOM: tiến độ cuộn điều khiển thân → lá → cánh mở → ánh sáng ---- */
+    /* ---- 3. BLOOM ---- */
     {
       const p = ps[2];
       const o = smooth(seg(p, 0, .08)) * (1 - smooth(seg(p, .92, 1)));
@@ -466,7 +479,7 @@
         const sp = smooth(p);
         const sc = (1 - (1 - sp) * .14 + seg(p, .85, 1) * .04);
         E.roseWrap.style.transform = REDUCED ? '' :
-          'translate3d(0,' + ((1 - sp) * 28).toFixed(1) + 'px,0) scale(' + sc.toFixed(4) + ')';
+          'translate3d(0,' + ((1 - sp) * 28).toFixed(1) + 'px,0) scale(' + sc.toFixed(4) + ') rotate(' + ((1 - sp) * 1.5).toFixed(2) + 'deg)';
 
         const stemP = REDUCED ? 1 : easeOut(seg(p, 0, .24));
         E.stem.style.strokeDashoffset = (1 - stemP).toFixed(4);
@@ -488,19 +501,20 @@
       }
     }
 
-    /* ---- 4. QUIET MOMENT: tối giản, hoàng hôn, zoom rất chậm ---- */
+    /* ---- 4. QUIET MOMENT ---- */
     {
       const p = ps[3];
       const o = smooth(seg(p, 0, .1)) * (1 - smooth(seg(p, .8, 1)));
       setScene(3, o);
       if (o > 0.003) {
-        E.s3cam.style.transform = 'scale(' + (1 + .04 * p * M).toFixed(4) + ')';
+        E.s3cam.style.transform =
+          'scale(' + (1 + .04 * p * M).toFixed(4) + ') rotate(' + (-p * 0.4 * M).toFixed(3) + 'deg)';
         reveal(E.q0, smooth(seg(p, .28, .42)));
         reveal(E.q1, smooth(seg(p, .48, .62)));
       }
     }
 
-    /* ---- 5. CONFESSION: nền sáng, chuyển động giảm hẳn, từng dòng hiện theo nhịp đọc ---- */
+    /* ---- 5. CONFESSION ---- */
     {
       const p = ps[4];
       const o = smooth(seg(p, .02, .12)) * (1 - smooth(seg(p, .96, 1)));
@@ -517,7 +531,7 @@
       }
     }
 
-    /* ---- 6. ENDING: cánh hoa cuối rơi, fade nhẹ, nút xem lại ---- */
+    /* ---- 6. ENDING ---- */
     {
       const p = ps[5];
       const o = smooth(seg(p, 0, .08));
@@ -551,7 +565,6 @@
   let pageVisible = true;
 
   const readScroll = function () { return window.pageYOffset || docEl.scrollTop || 0; };
-
   function request() { if (!raf) raf = requestAnimationFrame(frame); }
 
   function frame(now) {
@@ -560,14 +573,13 @@
     last = now;
 
     const target = clamp(readScroll() / maxScroll);
-    // Làm mượt u → "quán tính camera"; cuộn nhanh/ngược chỉ khiến u đuổi theo, không bao giờ nháy
     if (snap || REDUCED) { us = target; snap = false; }
     else {
       us += (target - us) * (1 - Math.exp(-dt * 10));
       if (Math.abs(target - us) < 2e-5) us = target;
     }
 
-    if (us !== lastU) { lastU = us; update(us); }
+    if (us !== lastU) { lastU = us; update(us, T); }
 
     if (!REDUCED) {
       T += dt * stops(g, TSCALE);
@@ -586,14 +598,15 @@
     const w = window.innerWidth, h = window.innerHeight;
     maxScroll = Math.max(1, docEl.scrollHeight - h);
     const d = Math.min(window.devicePixelRatio || 1, 2);
-    // Thanh địa chỉ điện thoại co/giãn chỉ đổi vài chục px → không dựng lại canvas
     if (force === true || w !== W || Math.abs(h - H) > 150 || d !== dpr) {
       W = w; H = h; dpr = d;
       canvas.width = Math.round(W * dpr);
       canvas.height = Math.round(H * dpr);
       canvas.style.height = H + 'px';
       psScale = clamp(Math.min(W, H) / 720, .62, 1.15);
-      if (REDUCED) drawPetals(0, 0, 0, .26);       // reduced-motion: vẽ tĩnh một lần, ít cánh
+      const nowSmall = Math.min(W, H) < 600;
+      if (nowSmall !== IS_SMALL) buildPetals();   // đổi thiết bị → dựng lại bố cục cánh hoa
+      if (REDUCED) drawPetals(0, 0, 0, .26);
       else drawPetals(us * maxScroll, g, T);
     }
     lastU = -1;
@@ -619,7 +632,6 @@
     window.addEventListener('orientationchange', function () { setTimeout(function () { resize(true); }, 250); });
     document.addEventListener('visibilitychange', function () { if (!document.hidden) { last = 0; request(); } });
 
-    // Tạm dừng vòng lặp khi trang không còn trong khung nhìn (ví dụ nhúng iframe); không hỗ trợ → luôn chạy
     if ('IntersectionObserver' in window) {
       try {
         new IntersectionObserver(function (entries) {
@@ -629,7 +641,6 @@
       } catch (e) { pageVisible = true; }
     }
 
-    // Nút "Xem lại từ đầu": mờ đi → về đầu trang → phát lại phần mở đầu
     E.restart.addEventListener('click', function () {
       stage.classList.add('fading');
       setTimeout(function () {
