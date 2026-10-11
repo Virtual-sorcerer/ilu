@@ -24,13 +24,13 @@
 
     quiet: [
       'cái bình hoa',
-      'em tự làm é :>'
+      'ko bt chị có thích nó khum -_- '
     ],
 
     confession: [
       'Chị Trâm,',
       'Em thích chị. Em chỉ muốn chị biết điều đó thôi.',
-      'Chị không cần trả lời liền đâu ó >.<'
+      'e thích chị nhiều lắm >.<'
     ],
 
     ending: {
