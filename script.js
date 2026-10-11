@@ -52,7 +52,7 @@
     scrollWeights: [1, 2.4, 3.2, 1.6, 3, 1.6],
 
     // === Magic ===
-    magic: {
+      magic: {
       buttonLabel: 'Chạm để mở khoá chế độ thần kỳ',
       deniedLabel: 'huhu chị hong cho em nghiêng máy :(',
       tiltStrength: 1.0,
@@ -61,7 +61,9 @@
         'thiệt á, hong có giỡn đâu',
         'thôi chị đọc hết rồi ha, e ngại é'
       ],
-      holdText: 'chị giữ lâu vậy... e còn ngại hơn é >.<',
+      tapMoreText: 'e nói rồi đó, chị nhớ nha',
+      holdText: 'giữ lâu vậy... =))) ",
+      rainText: 'e thích chị thật đó, hong có đùa đâu',
       tapRequiredForRain: 3,
       holdMs: 1200
     }
@@ -883,14 +885,14 @@
     const texts = CONFIG.magic.tapTexts;
     if (tapCount <= texts.length) {
       showBurstMsg(texts[tapCount - 1], 2400);
-    } else {
-      showBurstMsg('chị chọc e hoài à >.<', 2000);
+    }else {
+      showBurstMsg(CONFIG.magic.tapMoreText, 2400);
     }
     // Đủ số lần → mưa cánh hoa
     if (tapCount === CONFIG.magic.tapRequiredForRain) {
       rainTime = 6.0;
       setTimeout(function () {
-        showBurstMsg('e thích chị thật đó, hong có đùa đâu', 3200);
+        showBurstMsg(CONFIG.magic.rainText, 3200);
       }, 900);
     }
   }
@@ -917,7 +919,7 @@
       clearTimeout(holdTimer);
       if (!holdFired) {
         // Chỉ tap nếu hoa đã nở
-        if (sceneOpacity[2] > 0.55 && u2Phase() > 0.5) onRoseTap();
+        if (sceneOpacity[2] > 0.55 && u2Phase() > 0.5) ();
       }
     };
     E.roseHit.addEventListener('pointerdown', startHold);
