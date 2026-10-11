@@ -14,37 +14,37 @@
      CONFIG — sửa toàn bộ câu chữ và nhịp cuộn tại đây
      ======================================================= */
   const CONFIG = {
-    pageTitle: 'Gửi chị Trâm',
+    pageTitle: 'uhhh Hello chị ;-;',
 
     opening: {
-      name: 'Chị Trâm,',
-      sub: 'em có một điều muốn kể…',
+      name: 'Chị ơi ờm....,',
+      sub: 'em mún nói là..ờm..',
       hint: 'Cuộn xuống'
     },
 
     journey: [
-      'Có những điều em không muốn nói vội.',
-      'Nên em kể thật chậm.'
+      'thoi ngại lắm ;-; ',
+      'thoi nói đại lunn'
     ],
 
-    bloomLine: 'Có những điều cần thời gian để nở.',
+    bloomLine: 'e có, tình cảm v chị',
 
     quiet: [
-      'Món quà nhỏ này,',
-      'em tự tay làm — từng chút một.'
+      'cái bình hoa',
+      'em tự làm é :>'
     ],
 
     // Nội dung tỏ tình: giữ đúng 4 dòng, theo thứ tự
     confession: [
       'Chị Trâm,',
-      'Em tự làm món quà này vì em muốn dành tặng chị một điều gì đó thật riêng.',
+      'Em tự làm món quà ó :))),
       'Em thích chị. Em chỉ muốn chị biết điều đó thôi.',
-      'Chị không cần trả lời ngay đâu; em vẫn tôn trọng cảm xúc của chị.'
+      '>.<'
     ],
 
     ending: {
-      thanks: 'Cảm ơn chị đã đọc đến đây.',
-      button: 'Xem lại từ đầu'
+      thanks: 'Úi sời thấy web ngầu khum chị :D',
+      button: 'Xem lại'
     },
 
     // Độ dài cuộn của từng cảnh (đơn vị: chiều cao màn hình).
