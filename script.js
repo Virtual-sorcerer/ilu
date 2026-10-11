@@ -27,7 +27,7 @@
       'thoi nói đại lunn'
     ],
 
-    bloomLine: 'e có, tình cảm v chị',
+    bloomLine: 'e có, tình cảm v chị á ;-; ',
 
     quiet: [
       'cái bình hoa',
