@@ -1,0 +1,193 @@
+/* =========================================================
+   GỬI CHỊ TRÂM — style.css
+   Bảng màu: hồng phấn, dusty rose, hồng đậm vừa, trắng kem, vàng ấm
+   ========================================================= */
+
+:root {
+  --cream: #fff4ee;
+  --blush: #f7d9d9;
+  --dusty: #c98b94;
+  --rose: #b8475f;
+  --deep: #8a2f48;
+  --gold: #e2b66a;
+  --ink: #4a2630;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+  --bg1: #fdf1ec;
+  --bg2: #f7dcd9;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-text-size-adjust: 100%; background: #fdf1ec; }
+
+body {
+  font-family: var(--serif);
+  color: var(--ink);
+  background: var(--bg1);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Chiều cao thật được JS đặt lại theo CONFIG.scrollWeights; đây chỉ là giá trị dự phòng */
+#scroll { position: relative; height: 1380vh; height: calc(100svh * 13.8); }
+
+/* ---------- Sân khấu sticky ---------- */
+.stage {
+  position: sticky; top: 0;
+  height: 100vh; height: 100svh;
+  overflow: hidden;
+  transition: opacity .6s ease;
+}
+.stage.fading { opacity: 0; }
+
+#bg {
+  position: absolute; inset: 0; z-index: 0;
+  background: linear-gradient(180deg, var(--bg1), var(--bg2));
+}
+#petals { position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+#vignette {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, rgba(255,255,255,0) 55%, rgba(122,45,70,.10) 100%);
+}
+
+/* ---------- Cảnh ---------- */
+.scene {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 28px) 26px calc(env(safe-area-inset-bottom, 0px) + 28px);
+  opacity: 0; visibility: hidden; pointer-events: none;
+}
+#s0 { opacity: 1; visibility: visible; } /* tránh nháy trước khi JS chạy */
+.scene.light { color: #fff1ea; }
+
+.line {
+  font-size: clamp(1.4rem, 5.6vw, 2.15rem);
+  line-height: 1.5;
+  font-weight: 400;
+  max-width: 21em;
+  text-wrap: balance;
+}
+.cam { will-change: transform; }
+#s1 .line + .line { margin-top: .9em; }
+
+.rv { will-change: opacity, transform; }
+.reduced .rv { transition: opacity .9s ease; }
+
+/* ---------- 1. Opening ---------- */
+.open-text { position: relative; will-change: transform; }
+.intro-line {
+  opacity: 0; transform: translateY(16px);
+  animation: introIn 1.8s cubic-bezier(.2,.7,.2,1) var(--d, 0s) forwards;
+}
+.name {
+  font-size: clamp(2.8rem, 13vw, 5.2rem);
+  font-style: italic; color: var(--deep);
+  letter-spacing: -.01em; line-height: 1.05;
+}
+.sub { margin-top: .55em; font-size: clamp(1.2rem, 5vw, 1.8rem); color: var(--ink); }
+@keyframes introIn { to { opacity: 1; transform: none; } }
+
+.sprig {
+  position: absolute; top: -2svh; right: -6vw;
+  width: min(92vw, 560px); aspect-ratio: 4 / 5;
+  will-change: transform; pointer-events: none;
+}
+.sprig svg {
+  width: 100%; height: 100%; overflow: visible;
+  transform-origin: 100% 0%;
+  animation: sway 9s ease-in-out infinite;
+}
+@keyframes sway { 0%, 100% { transform: rotate(-1.4deg); } 50% { transform: rotate(1.6deg); } }
+
+.hint {
+  position: absolute; left: 0; right: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
+  display: flex; justify-content: center;
+}
+.hint-in {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  font-size: .78rem; letter-spacing: .28em; text-transform: uppercase; color: #9a5a68;
+  opacity: 0; animation: fadeIn 1.4s ease 4s forwards;
+}
+.hint-line {
+  display: block; width: 1px; height: 38px; transform-origin: top;
+  background: linear-gradient(to bottom, #b8475f, rgba(184,71,95,0));
+  animation: hintDrop 2.6s ease-in-out infinite;
+}
+@keyframes fadeIn { to { opacity: 1; } }
+@keyframes hintDrop { 0% { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
+
+/* ---------- 2. Petal journey ---------- */
+.blob { position: absolute; border-radius: 50%; pointer-events: none; will-change: transform; }
+.b1 { width: 70vmax; height: 70vmax; left: -28vmax; top: 8%;  background: radial-gradient(circle, rgba(255,238,216,.65), rgba(255,238,216,0) 62%); }
+.b2 { width: 60vmax; height: 60vmax; right: -26vmax; top: 38%; background: radial-gradient(circle, rgba(255,214,222,.55), rgba(255,214,222,0) 62%); }
+.b3 { width: 48vmax; height: 48vmax; left: 10%; top: 70%;  background: radial-gradient(circle, rgba(255,226,176,.45), rgba(255,226,176,0) 62%); }
+
+/* ---------- 3. Bloom ---------- */
+.glow {
+  position: absolute; left: 50%; top: 42%;
+  width: min(150vw, 1100px); aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(255,219,160,.78) 0%, rgba(255,196,170,.4) 28%, rgba(255,196,190,0) 62%);
+  opacity: 0; pointer-events: none; will-change: transform, opacity;
+}
+.rose-wrap {
+  position: relative;
+  height: min(70svh, 138vw); aspect-ratio: 400 / 640;
+  margin-top: -4svh;
+  transform-origin: 50% 60%; will-change: transform;
+}
+.rose-wrap svg {
+  width: 100%; height: 100%; overflow: visible;
+  transform-origin: 50% 98%;
+  animation: roseSway 7s ease-in-out infinite;
+}
+@keyframes roseSway { 0%, 100% { transform: rotate(-.8deg); } 50% { transform: rotate(.9deg); } }
+.bloom-line {
+  position: absolute; left: 0; right: 0; margin: 0 auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 7svh);
+  padding: 0 26px;
+  font-size: clamp(1.1rem, 4.6vw, 1.5rem); font-style: italic; color: var(--deep);
+}
+
+/* ---------- 4. Quiet moment ---------- */
+.quiet { font-size: clamp(1.3rem, 5.2vw, 1.95rem); letter-spacing: .01em; }
+.quiet.em { font-style: italic; margin-top: .5em; }
+
+/* ---------- 5. Confession ---------- */
+.confession { max-width: 34rem; will-change: transform; }
+.c-name {
+  font-size: clamp(2.1rem, 8.6vw, 3.1rem);
+  font-style: italic; color: var(--deep); line-height: 1.15; margin-bottom: .6em;
+}
+.c-line { font-size: clamp(1.12rem, 4.5vw, 1.5rem); line-height: 1.65; margin-bottom: .95em; }
+.c-line.soft { color: #6a3a48; }
+.rule { display: block; width: 44px; height: 1px; margin: 1.5em auto 0; background: var(--gold); transform-origin: center; will-change: transform, opacity; }
+
+/* ---------- 6. Ending ---------- */
+.fall { position: absolute; left: 50%; top: 0; width: 84px; margin-left: -42px; will-change: transform, opacity; }
+.thanks { font-size: clamp(1.2rem, 4.8vw, 1.7rem); font-style: italic; color: var(--deep); position: relative; }
+.btn {
+  position: relative; margin-top: 2.2em;
+  font: inherit; font-size: 1.02rem; letter-spacing: .05em;
+  padding: .9em 2em; border-radius: 999px;
+  border: 1px solid rgba(184,71,95,.55);
+  color: var(--deep); background: rgba(255,244,238,.55);
+  cursor: pointer; pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color .25s ease, color .25s ease, box-shadow .25s ease;
+}
+.btn:hover { background: var(--rose); color: var(--cream); }
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(226,182,106,.8); }
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .intro-line { animation: none; opacity: 1; transform: none; }
+  .hint-in { animation: none; opacity: 1; }
+  .hint-line, .sprig svg, .rose-wrap svg { animation: none; }
+  .stage { transition: none; }
+}
+.reduced .intro-line { animation: none; opacity: 1; transform: none; }
+.reduced .hint-in { animation: none; opacity: 1; }
+.reduced .hint-line, .reduced .sprig svg, .reduced .rose-wrap svg { animation: none; }

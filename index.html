@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fdf1ec">
+<title>Gửi chị Trâm</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ SVG DEFS DÙNG CHUNG (gradient cánh hoa, lá) ============ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="gRing0" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7cbd3"/><stop offset=".6" stop-color="#e093a5"/><stop offset="1" stop-color="#b9506a"/>
+    </linearGradient>
+    <linearGradient id="gRing1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f1b4c0"/><stop offset=".6" stop-color="#d27a90"/><stop offset="1" stop-color="#a94560"/>
+    </linearGradient>
+    <linearGradient id="gRing2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e99fb0"/><stop offset=".6" stop-color="#c76683"/><stop offset="1" stop-color="#97304d"/>
+    </linearGradient>
+    <linearGradient id="gRing3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d9788f"/><stop offset=".6" stop-color="#b24a68"/><stop offset="1" stop-color="#85274a"/>
+    </linearGradient>
+    <linearGradient id="gLeaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a3b590"/><stop offset="1" stop-color="#6b8260"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<main id="scroll">
+  <!-- Một "sân khấu" sticky duy nhất; mọi cảnh xếp chồng bên trong và được điều khiển bằng tiến độ cuộn -->
+  <div class="stage" id="stage">
+    <div id="bg"></div>
+    <canvas id="petals" aria-hidden="true"></canvas>
+    <div id="vignette"></div>
+
+    <!-- ========== CẢNH 1 — OPENING ========== -->
+    <section class="scene" id="s0" aria-label="Mở đầu">
+      <div class="sprig" id="sprig">
+        <svg viewBox="0 0 400 500" aria-hidden="true">
+          <g fill="none" stroke="#7b8f69" stroke-width="3" stroke-linecap="round">
+            <path d="M420 -20 C340 50 300 140 236 226 C196 280 160 316 126 362"/>
+          </g>
+          <g id="sprigLeaves">
+            <g transform="translate(320 98) rotate(25) scale(.9)"><path d="M0 0 C22 -24 66 -24 90 -4 C64 16 22 18 0 0Z" fill="url(#gLeaf)"/><path d="M6 0 C30 -5 58 -6 84 -4" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.4"/></g>
+            <g transform="translate(292 150) rotate(175) scale(1)"><path d="M0 0 C22 -24 66 -24 90 -4 C64 16 22 18 0 0Z" fill="url(#gLeaf)"/><path d="M6 0 C30 -5 58 -6 84 -4" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.4"/></g>
+            <g transform="translate(250 214) rotate(30) scale(1.05)"><path d="M0 0 C22 -24 66 -24 90 -4 C64 16 22 18 0 0Z" fill="url(#gLeaf)"/><path d="M6 0 C30 -5 58 -6 84 -4" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.4"/></g>
+            <g transform="translate(212 262) rotate(165) scale(.85)"><path d="M0 0 C22 -24 66 -24 90 -4 C64 16 22 18 0 0Z" fill="url(#gLeaf)"/><path d="M6 0 C30 -5 58 -6 84 -4" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.4"/></g>
+          </g>
+          <!-- nụ hoa cuối nhành -->
+          <g transform="translate(126 362) rotate(-140) scale(.62)">
+            <path d="M0 0 C-58 -14 -74 -78 -40 -116 C-20 -138 20 -138 40 -116 C74 -78 58 -14 0 0Z" transform="rotate(-20) scale(.92)" fill="url(#gRing1)" stroke="rgba(255,244,240,.35)"/>
+            <path d="M0 0 C-58 -14 -74 -78 -40 -116 C-20 -138 20 -138 40 -116 C74 -78 58 -14 0 0Z" transform="rotate(20) scale(.92)" fill="url(#gRing0)" stroke="rgba(255,244,240,.35)"/>
+            <path d="M0 0 C-58 -14 -74 -78 -40 -116 C-20 -138 20 -138 40 -116 C74 -78 58 -14 0 0Z" transform="scale(.98)" fill="url(#gRing2)" stroke="rgba(255,244,240,.35)"/>
+            <g transform="rotate(-72) scale(.7)"><path d="M0 0 C22 -24 66 -24 90 -4 C64 16 22 18 0 0Z" fill="url(#gLeaf)"/></g>
+            <g transform="rotate(-108) scale(.7)"><path d="M0 0 C22 -24 66 -24 90 -4 C64 16 22 18 0 0Z" fill="url(#gLeaf)"/></g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="open-text" id="openText">
+        <p class="intro-line name" id="oName" style="--d:.6s"></p>
+        <p class="intro-line sub" id="oSub" style="--d:2s"></p>
+      </div>
+
+      <div class="hint" id="hint">
+        <div class="hint-in"><span id="hintText"></span><i class="hint-line"></i></div>
+      </div>
+    </section>
+
+    <!-- ========== CẢNH 2 — PETAL JOURNEY ========== -->
+    <section class="scene" id="s1" aria-label="Cánh hoa bay">
+      <div class="blob b1" id="b1"></div>
+      <div class="blob b2" id="b2"></div>
+      <div class="blob b3" id="b3"></div>
+      <div class="cam" id="s1cam">
+        <p class="line rv" id="j0"></p>
+        <p class="line rv" id="j1"></p>
+      </div>
+    </section>
+
+    <!-- ========== CẢNH 3 — BLOOM ========== -->
+    <section class="scene" id="s2" aria-label="Hoa nở">
+      <div class="glow" id="bloomGlow"></div>
+      <div class="rose-wrap" id="roseWrap">
+        <svg id="rose" viewBox="0 0 400 640" aria-hidden="true">
+          <path id="stem" d="M200 318 C194 400 210 480 197 628" pathLength="1" fill="none" stroke="#728a62" stroke-width="7" stroke-linecap="round" stroke-dasharray="1 1" stroke-dashoffset="1" opacity="0"/>
+          <g id="leafR" transform="translate(204 470) scale(.001) rotate(-38)"><path d="M0 0 C22 -24 66 -24 90 -4 C64 16 22 18 0 0Z" fill="url(#gLeaf)"/><path d="M6 0 C30 -5 58 -6 84 -4" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.4"/></g>
+          <g id="leafL" transform="translate(198 548) scale(-.001 .001) rotate(-38)"><path d="M0 0 C22 -24 66 -24 90 -4 C64 16 22 18 0 0Z" fill="url(#gLeaf)"/><path d="M6 0 C30 -5 58 -6 84 -4" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.4"/></g>
+          <ellipse id="recept" cx="200" cy="316" rx="15" ry="11" fill="#6f8760" opacity="0"/>
+          <g id="petalsG"></g>
+        </svg>
+      </div>
+      <p class="line rv bloom-line" id="bLine"></p>
+    </section>
+
+    <!-- ========== CẢNH 4 — QUIET MOMENT ========== -->
+    <section class="scene light" id="s3" aria-label="Khoảng lặng">
+      <div class="cam" id="s3cam">
+        <p class="line quiet rv" id="q0"></p>
+        <p class="line quiet em rv" id="q1"></p>
+      </div>
+    </section>
+
+    <!-- ========== CẢNH 5 — CONFESSION ========== -->
+    <section class="scene" id="s4" aria-label="Lời tỏ tình">
+      <div class="confession" id="confBox">
+        <p class="c-name rv" id="c0"></p>
+        <p class="c-line rv" id="c1"></p>
+        <p class="c-line rv" id="c2"></p>
+        <p class="c-line soft rv" id="c3"></p>
+        <i class="rule" id="rule"></i>
+      </div>
+    </section>
+
+    <!-- ========== CẢNH 6 — ENDING ========== -->
+    <section class="scene" id="s5" aria-label="Kết">
+      <svg class="fall" id="fall" viewBox="-75 -145 150 155" aria-hidden="true">
+        <path d="M0 0 C-58 -14 -74 -78 -40 -116 C-20 -138 20 -138 40 -116 C74 -78 58 -14 0 0Z" fill="url(#gRing1)" stroke="rgba(255,244,240,.4)" stroke-width="1.5"/>
+        <ellipse cx="0" cy="-70" rx="16" ry="48" fill="rgba(255,255,255,.2)"/>
+      </svg>
+      <p class="line thanks rv" id="thanks"></p>
+      <button class="btn rv" id="restart" type="button" tabindex="-1"></button>
+    </section>
+  </div>
+</main>
+
+<noscript>
+  <p style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;background:#fdf1ec;color:#4a2630;font-family:Georgia,serif;font-size:1.2rem">
+    Trang này cần bật JavaScript để hiển thị.
+  </p>
+</noscript>
+
+<script src="script.js"></script>
+</body>
+</html>
